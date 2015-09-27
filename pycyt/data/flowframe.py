@@ -1,6 +1,7 @@
 import re
 
 import numpy as np
+import pandas as pd
 
 from pycyt.io import FCSFile
 
@@ -14,14 +15,14 @@ class FlowFrame(object):
 	uncreative.
 
 	This class generally shouldn't be instantiated directly, instead the class
-	methods from_file() or from_array() should be used.
+	methods from_file(), from_array(), or from_dataframe() should be used.
 
 	Public attributes:
 		ID: str (read-only property). (Probably unique) string identifier
 			assigned at object creation.
-		data: numpy.ndarray. The most important one. An array of shape
-			(tot, par). Is assignable as long as the new array has a shape
-			compatible with the number of channels.
+		data: pandas.DataFrame. The most important one. A pandas DataFrame
+			with events as rows and channels as columns. Is assignable as long
+			as the new dataframe has the same columns and column names.
 		filepath: str|None (read-only property): If backed by a file on disk,
 			absolute path to that file.
 		fcsfile: pyct.io.FCSFile|None (read-only property). If backed by file
@@ -39,7 +40,10 @@ class FlowFrame(object):
 
 	Public methods:
 		from_file (class method): Create from a file on disk
-		from_array (class method): Create from numpy.ndarray
+		from_array (class method): Create from numpy.ndarray and channel names
+		from_dataframe (class method): Create from pandas.DataFrame
+		copy: Creates a copy with the same data
+
 	"""
 
 	# Keep track of next automatic numeric ID
@@ -59,16 +63,28 @@ class FlowFrame(object):
 			if self._lazy:
 				self._data = None
 			else:
-				self._data = self._fcsfile.read_data(fmt='matrix')
+				self._data = self._load_data()
 
-		# From array
+		# From np.ndarray
 		elif from_ == 'array':
 
 			self._fcsfile = None
 			self._lazy = False
 
-			self._data = kwargs['array']
 			self._channel_names = kwargs['channels']
+			self._data = pd.DataFrame(kwargs['array'],
+				columns=self._channel_names)
+
+			self._par = int(self._data.shape[1]) # from long
+
+		# From pands.DataFrame
+		elif from_ == 'dataframe':
+
+			self._fcsfile = None
+			self._lazy = False
+
+			self._data = kwargs['dataframe']
+			self._channel_names = list(self._data.columns)
 
 			self._par = int(self._data.shape[1]) # from long
 
@@ -126,6 +142,25 @@ class FlowFrame(object):
 
 		return cls('array', array=array, channels=channels, ID=ID)
 
+	@classmethod
+	def from_dataframe(cls, dataframe, ID=None):
+		"""
+		Create from numpy.ndarray and channel names
+
+		Args:
+			dataframe: pands.DataFrame with events in rows and channels as
+				columns.
+			ID: str|None. String ID for FlowFrame. If none one will be created
+				automatically.
+
+		Returns:
+			pycyt.FlowFrame
+		"""
+		if not isinstance(dataframe, pd.DataFrame):
+			raise TypeError('dataframe must be pandas.DataFrame')
+
+		return cls('dataframe', dataframe=array, ID=ID)
+
 	@property
 	def ID(self):
 		return self._ID
@@ -133,19 +168,29 @@ class FlowFrame(object):
 	@property
 	def data(self):
 		if self._lazy:
-			return self._fcsfile.read_data(fmt='matrix')
+			return self._load_data()
 		else:
 			return self._data
 
 	@data.setter
 	def data(self, value):
+		"""Allow assignment with pandas.DataFrame or numpy.ndarray"""
 		if self._lazy:
 			raise AttributeError('Cannot set data when lazy-loading enabled')
-		if not isinstance(value, np.ndarray):
-			raise TypeError('Data must be numpy.ndarray')
-		if value.ndim != 2 or value.shape[1] != self._par:
-			raise ValueError('Data array must have compatible shape')
-		self._data = value
+
+		if isinstance(value, np.ndarray):
+			if value.ndim != 2 or value.shape[1] != self._par:
+				raise ValueError('Data array must have compatible shape')
+			self._data = pd.DataFrame(value.copy(),
+				columns=self._channel_names)
+
+		elif isinstance(value, pd.DataFrame):
+			if tuple(value.columns) != tuple(self._channel_names):
+				raise ValueError('DataFrame must have identical columns')
+			self._data = value.copy()
+
+		else:
+			raise TypeError(value)
 
 	@property
 	def filepath(self):
@@ -220,8 +265,7 @@ class FlowFrame(object):
 				ID = match.group(1) + str(int(match.group(2) or 1) + 1)
 			else:
 				ID = self._ID + '-copy'
-		return FlowFrame.from_array(self.data.copy(), self.channel_names,
-			ID=ID)
+		return FlowFrame.from_dataframe(self.data.copy(), ID=ID)
 
 	@classmethod
 	def _auto_ID(cls):
@@ -229,3 +273,8 @@ class FlowFrame(object):
 		ID = cls.__name__ + str(cls._next_ID)
 		cls._next_ID += 1
 		return ID
+
+	def _load_data(self):
+		"""Loads data from linked fcs file into pandas.DataFrame"""
+		return pd.DataFrame(self._fcsfile.read_data(fmt='matrix'),
+			columns=self._channel_names)
