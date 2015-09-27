@@ -1,3 +1,4 @@
+import sys
 import os
 import warnings
 
@@ -72,7 +73,7 @@ class FCSFile(object):
 	def tot(self):
 		return self._tot
 
-	def read_data(self, slice1=None, slice2=None, fmt='matrix'):
+	def read_data(self, slice1=None, slice2=None, fmt='matrix', systype=True):
 		"""
 		Reads data from the file. A slice of events may be selected.
 
@@ -87,6 +88,11 @@ class FCSFile(object):
 				is "F", "D", or "I" with constant bytes per column. Use
 				"events" for when you're operating outside the realm of logic
 				and using differently-sized integer columns.
+			systype: bool. If true, converts data types in memory to native
+				ones for current system. Basically this means swapping the
+				byte order if needed. This results in a dtype equivalent to
+				one of np.float32, np.float64, np.uint8, np.uint16, np.uint32,
+				or np.uint64. Only applies when fmt=="matrix"
 
 		Returns:
 			numpy.ndarray. For fmt=="matrix", a two-dimensional array with
@@ -125,7 +131,18 @@ class FCSFile(object):
 
 		# Read in matrix format
 		if fmt == 'matrix':
-			return self._read_matrix(offset, nevents)
+			data = self._read_matrix(offset, nevents)
+
+			# Convert to correct byte order
+			if systype:
+				if sys.byteorder == 'little' and data.dtype.byteorder != '<':
+					# This swaps bytes in-place in memory
+					data.byteswap(True)
+					# Replace variable with new view interpeting the order
+					# correctly
+					data = data.newbyteorder()
+
+			return data
 
 		# Read in events format
 		if fmt == 'events':
