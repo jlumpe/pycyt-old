@@ -3,7 +3,7 @@ import warnings
 import pandas as pd
 import numpy as np
 
-from metadata import make_channel_frame
+from pycyt.errors import FCSReadError
 
 
 class FCSFile(object):
@@ -102,9 +102,6 @@ class FCSFile(object):
 			# Handle special values in keywords
 			self._handle_keywords()
 
-			# Validate metadata
-			self._validate()
-
 	def _read_text(self, fh):
 		"""Read in and parse text segment of file given file handle"""
 
@@ -154,7 +151,7 @@ class FCSFile(object):
 		self._keywords = dict(zip(text_keys, text_values))
 
 	def _handle_keywords(self):
-		"""Handles special values in keywords"""
+		"""Parses and validates other important keyword values"""
 
 		# Create channels dataframe
 		self._create_channels_df()
@@ -162,16 +159,98 @@ class FCSFile(object):
 		# Total number of events
 		self._tot = int(self._keywords['$TOT'])
 
-		# Data type
-		self._datatype = self._keywords['$DATATYPE']
+		# Only list mode supported
+		mode = self._keywords['$MODE']
+		if mode != 'L':
+			raise FCSReadError(
+				'Error parsing "{0}": $MODE="{1}" not supported'
+				.format(self._path, mode))
 
-		# Byte order/endianness
+		# Byte order/endianness, >/< character used for numpy dtype
 		if self._keywords['$BYTEORD'] == '1,2,3,4':
 			self._byteord = 'little'
+			ordchar = '<'
 		elif self._keywords['$BYTEORD'] == '4,3,2,1':
 			self._byteord = 'big'
+			ordchar = '>'
 		else:
 			raise FCSReadError(path=self._path)
+
+		# Check data type and determine information needed to read the data
+		self._datatype = self._keywords['$DATATYPE']
+
+		# F datatype is 32-bit float as per FCS3.1 spec
+		if self._datatype == 'F':
+
+			if not all(bits == 32 for bits in self._channels['$PnB']):
+				raise FCSReadError(
+					'Error parsing "{0}": $PnB must be 32 for all '
+					'parameters if $DATATYPE is F'
+					.format(self._path))
+
+			self._channel_bytes = [4] * self._par
+			self._channel_dtypes = [ordchar + 'f4'] * self._par
+			self._const_type = True
+			self._int_masks = None
+
+		# D datatype is 64-bit float as per FCS3.1 spec
+		elif self._datatype == 'D':
+
+			if not all(bits == 64 for bits in self._channels['$PnB']):
+				raise FCSReadError(
+					'Error parsing "{0}": $PnB must be 64 for all '
+					'parameters if $DATATYPE is D'
+					.format(self._path))
+
+			self._channel_bytes = [8] * self._par
+			self._channel_dtypes = [ordchar + 'f8'] * self._par
+			self._const_type = True
+			self._int_masks = None
+
+		# I datatype is unsigned integer, variable size
+		elif self._datatype == 'I':
+
+			# Support only 8, 16, 32, and 64-bit integers
+			supported_bits = [8, 16, 32, 64]
+			if any(b not in supported_bits for b in self._channels['$PnB']):
+				raise FCSReadError(
+					'Error parsing "{0}": integer sizes other than {1}-bit '
+					'not supported.'
+					.format(self._path, ', '.join(map(str, supported_bits)))
+					)
+
+			# Bytes per channel
+			self._channel_bytes = [bits / 8
+				for bits in self._channels['$PnB']]
+
+			# Numpy dtype string per channel
+			self._channel_dtypes = [ordchar + 'u' + b
+				for b in self._channel_bytes]
+
+			# Check all types are the same
+			self._const_type = all(b == channel_bytes for b in channel_bytes)
+
+			# Caluclate bit masks
+			self._int_masks = []
+			for ch in self._channels.iterrows():
+				range_ = ch['$PnR']
+				bits = ch['$PnB']
+				if range_ == (1 << bits):
+					self._int_masks.append(None)
+				else:
+					mask = (1 << (range_ - 1).bit_length()) - 1
+					if mask >= (1 << bits):
+						raise FCSReadError(
+							'Error parsing "{0}": $PnR incompatible with '
+							'$PnB for parameter {1}'
+							.format(self._path, ch['$PnN']))
+					self._int_masks.append(mask)
+
+		# Other data types not supported
+		else:
+			raise FCSReadError(
+				'Error parsing "{0}": $DATATYPE="{1}" not supported'
+				.format(self._path, mode))
 
 	def _create_channels_df(self):
 		"""
@@ -250,23 +329,3 @@ class FCSFile(object):
 
 			# Add row
 			self._channels.loc[row['$PnN']] = row
-
-	def _validate(self):
-		"""
-		Checks metadata values that were parsed successfully but may be
-		invalid or not supported
-		"""
-
-		# Only list mode supported
-		mode = self._keywords['$MODE']
-		if mode != 'L':
-			raise FCSReadError(
-				'Error parsing "{0}": $MODE="{1}" not supported'
-				.format(self._path, mode))
-
-		# Check datatype
-		# Supported types are unsigned int (I), 32 or 64-bit float (F, D)
-		if self._datatype not in ['I', 'F', 'D']:
-			raise FCSReadError(
-				'Error parsing "{0}": $DATATYPE="{1}" not supported'
-				.format(self._path, mode))
