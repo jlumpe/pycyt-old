@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import pandas as pd
@@ -16,12 +17,30 @@ class FCSFile(object):
 	Technically this was only written to support FCS version 3.1 files,
 	but could work for others. Refer to FCS 3.1 specification in
 	http://isac-net.org/PDFS/90/9090600d-19be-460d-83fc-f8a8b004e0f9.pdf
+
+	Public attributes:
+		filepath: str (read-only property): Absolute path to FCS file on disk.
+		version: str (read-only property): FCS version of parsed file.
+		keywords: dict (read-only property): FCS keywords and values parsed
+			from the TEXT segment.
+		par: int (read-only property): Number of paramters, equal to value of
+			$PAR keyword.
+		channels: pandas.DataFrame (read-only property): Data frame with
+			channels in rows and all $Pn? keywords in columns. Values are
+			parsed versions of keyword values.
+		channel_names: list of str (read-only property): $PnN property
+			for each channel.
+		tot: int (read-only property): Total number of events, equal to value
+			of $TOT keyword.
+
+	Public methods:
+		read_data: Reads the actual data from the file into a numpy.ndarray.
 	"""
 
 	def __init__(self, path):
 		"""Creation from file path"""
 
-		self._path = path
+		self._path = os.path.realpath(path)
 
 		self._read_metadata()
 
@@ -53,32 +72,42 @@ class FCSFile(object):
 	def tot(self):
 		return self._tot
 
-	def read_data(self, *args):
+	def read_data(self, slice1=None, slice2=None, fmt='matrix'):
 		"""
 		Reads data from the file. A slice of events may be selected.
 
 		Args:
-			*args: If given, either (end,) or (begin, end). Similar to first
-				two arguments to slice(). Specifies range of events to read.
+			slice1: int|None. If slice2 is none, number of events to read.
+				If slice2 is given, first event to read. If none, read all
+				events.
+			slice2: int|none. If given, upper end of slice of events to read
+				(exclusive). Like using [slice1:slice2] on a list.
+			fmt: "matrix"|"events". Determines format of data returned.
+				"matrix" is the default and is recommended for when $DATATYPE
+				is "F", "D", or "I" with constant bytes per column. Use
+				"events" for when you're operating outside the realm of logic
+				and using differently-sized integer columns.
 
 		Returns:
-			numpy.ndarray. 1-d array with one element per event. dtype is a
-			numpy.void containing correct scalar dtype for each channel in
-			order.
+			numpy.ndarray. For fmt=="matrix", a two-dimensional array with
+			events in rows and channels in columns. Data type is determined by
+			the maximum-size data type of the columns (they can only be
+			different when $DATATYPE is "I"). For fmt=="events", a 1-d array
+			with one element per event. dtype is a numpy.void containing
+			correct scalar dtype for each channel in order.
 		"""
 
 		# Begin and end events (inclusive/exclusive)
-		if len(args) == 0:
+		if slice1 is None:
 			event_range = (0, self._tot)
-		elif len(args) == 1:
-			event_range = (0,) + args
-		elif len(args) == 2:
-			event_range = args
 		else:
-			raise ValueError('Invalid slice: {0}'.format(args))
+			if slice2 is None:
+				event_range = (0,) + slice1
+			else:
+				event_range = (slice1, slice2)
 
 		if event_range[0] < 0 or event_range[1] > self._tot:
-			raise ValueError('Invalid slice: {0}'.format(args))
+			raise ValueError('Invalid slice: {0}'.format(event_range))
 
 		# Number of events to read
 		nevents = event_range[1] - event_range[0]
@@ -94,27 +123,83 @@ class FCSFile(object):
 				'inconsistent with $PnB and $TOT'
 				.format(self._path))
 
+		# Read in matrix format
+		if fmt == 'matrix':
+			return self._read_matrix(offset, nevents)
+
+		# Read in events format
+		if fmt == 'events':
+			return self._read_events(offset, nevents)
+
+		# Improper format
+		else:
+			raise ValueError('Invalid fmt argument: {0}'.format(repr(fmt)))
+
+	def _read_matrix(self, offset, nevents):
+		"""Reads data in matrix format (homogeneous data type)"""
+
+		# If all column data types are identical, can do this directly
+		if self._const_type:
+
+			# Data type and number of elements
+			dtype = np.dtype(self._channel_dtypes[0])
+			nelem = nevents * self._par
+
+			# Read in data as linear array
+			with open(self._path, 'rb') as fh:
+				fh.seek(offset)
+				data = np.fromfile(fh, dtype=dtype, count=nelem)
+
+			# Reshape
+			# Note that C-order has last axis (channels) chaning fastest
+			data = data.reshape((nevents, self._par), order='C')
+
+			# If integer type, apply masks
+			if self._datatype == 'I':
+				for c in range(self._par):
+					mask = self._int_masks[c]
+					if mask is not None:
+						data[:,c] &= np.asarray([mask],
+							dtype=self._channel_dtypes[c])
+
+			return data
+
+		# Otherwise need to do it the other way and convert
+		else:
+
+			events = self._read_events(offset, nevents)
+
+			# Widest column type
+			widest = np.argmax(self._channel_bytes)
+			dtype = np.dtype(self._channel_dtypes[widest])
+
+			# Allocate array
+			data = np.ndarray((nevents, self._par), dtype=dtype)
+
+			# Copy data column-by-column
+			for c, name in enumerate(self.channel_names):
+				data[:,c] = events[name]
+
+			return data
+
+	def _read_events(self, offset, nevents):
+		"""Reads data in events format (heterogeneous data types)"""
+
 		# Numpy composite data type for each event
 		event_dtype = np.dtype(zip(self.channel_names, self._channel_dtypes))
 
-		# Open file
+		# Read data from file
 		with open(self._path, 'rb') as fh:
-
-			# Seek to start of data
 			fh.seek(offset)
-
-			# Read in data
 			data = np.fromfile(fh, dtype=event_dtype, count=nevents)
 
 		# Apply integer masks as needed
 		if self._datatype == 'I':
 			for ch_name, mask, dtype in zip(self.channel_names,
 					self._int_masks, self._channel_dtypes):
-
 				if mask is not None:
 					data[ch_name] &= np.asarray([mask], dtype=dtype)
 
-		# Done
 		return data
 
 	def _read_metadata(self):
