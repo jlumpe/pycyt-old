@@ -10,5 +10,8 @@ setup(
     author_email='mjlumpe@gmail.com',
     license='MIT',
     packages=find_packages(),
+    install_requires=[
+    	'numpy>=1.9.2',
+    	'pandas>=0.16.2'
+    	]
 )
-
