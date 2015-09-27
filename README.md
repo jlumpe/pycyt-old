@@ -8,7 +8,7 @@ If you somehow got here looking for flow cytometry software to actually use in y
 * [fcm](https://pythonhosted.org/fcm/basic.html>) - Another python package that seems to support similar features
 * [Bioconductor](http://master.bioconductor.org) - Package for the R language
 
-I would recommend **FlowCytometryTools**, I have found it very useful in some other projects. It has support for gates, transformations, plotting, and includes in interactive GUI. Unfortunately I found I needed better support for additional gate types in higher dimensions, which is what led to this project. **Bioconductor** is also great if you are working in R.
+I would recommend **FlowCytometryTools**, I have found it very useful in some other projects. It has support for gates, transformations, plotting, and includes an interactive GUI. Unfortunately I found I needed better support for additional gate types in higher dimensions, which is what led to this project. **Bioconductor** is also great if you are working in R.
 
 # Features
 
