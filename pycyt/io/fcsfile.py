@@ -66,7 +66,7 @@ class FCSFile(object):
 
 	@property
 	def channel_names(self):
-		return self._channels['$PnN']
+		return list(self._channels['$PnN'])
 	
 	@property
 	def tot(self):
