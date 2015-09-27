@@ -44,10 +44,78 @@ class FCSFile(object):
 	@property
 	def channels(self):
 		return self._channels
+
+	@property
+	def channel_names(self):
+		return self._channels['$PnN']
 	
 	@property
 	def tot(self):
-		return self._tot	
+		return self._tot
+
+	def read_data(self, *args):
+		"""
+		Reads data from the file. A slice of events may be selected.
+
+		Args:
+			*args: If given, either (end,) or (begin, end). Similar to first
+				two arguments to slice(). Specifies range of events to read.
+
+		Returns:
+			numpy.ndarray. 1-d array with one element per event. dtype is a
+			numpy.void containing correct scalar dtype for each channel in
+			order.
+		"""
+
+		# Begin and end events (inclusive/exclusive)
+		if len(args) == 0:
+			event_range = (0, self._tot)
+		elif len(args) == 1:
+			event_range = (0,) + args
+		elif len(args) == 2:
+			event_range = args
+		else:
+			raise ValueError('Invalid slice: {0}'.format(args))
+
+		if event_range[0] < 0 or event_range[1] > self._tot:
+			raise ValueError('Invalid slice: {0}'.format(args))
+
+		# Number of events to read
+		nevents = event_range[1] - event_range[0]
+
+		# Bytes per event
+		bytes_per_event = sum(self._channel_bytes)
+
+		# Offset to start reading data at
+		offset = self._offsets['DATA'][0] + bytes_per_event * event_range[0]
+		if offset > self._offsets['DATA'][1] + 1:
+			raise FCSReadError(
+				'Error reading data from "{0}": data offset range '
+				'inconsistent with $PnB and $TOT'
+				.format(self._path))
+
+		# Numpy composite data type for each event
+		event_dtype = np.dtype(zip(self.channel_names, self._channel_dtypes))
+
+		# Open file
+		with open(self._path, 'rb') as fh:
+
+			# Seek to start of data
+			fh.seek(offset)
+
+			# Read in data
+			data = np.fromfile(fh, dtype=event_dtype, count=nevents)
+
+		# Apply integer masks as needed
+		if self._datatype == 'I':
+			for ch_name, mask, dtype in zip(self.channel_names,
+					self._int_masks, self._channel_dtypes):
+
+				if mask is not None:
+					data[ch_name] &= np.asarray([mask], dtype=dtype)
+
+		# Done
+		return data
 
 	def _read_metadata(self):
 		"""
