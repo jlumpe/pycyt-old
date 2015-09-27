@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import pandas as pd
@@ -21,7 +22,7 @@ class FCSFile(object):
 	def __init__(self, path):
 		"""Creation from file path"""
 
-		self._path = path
+		self._path = os.path.realpath(path)
 
 		self._read_metadata()
 
