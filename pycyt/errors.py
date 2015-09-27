@@ -15,4 +15,4 @@ class FCSReadError(IOError):
 			else:
 				msg = msg_template.format('FCS file')
 
-		super(FCSError, self).__init__(msg)
+		super(FCSReadError, self).__init__(msg)
