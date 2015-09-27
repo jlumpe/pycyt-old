@@ -17,6 +17,24 @@ class FCSFile(object):
 	Technically this was only written to support FCS version 3.1 files,
 	but could work for others. Refer to FCS 3.1 specification in
 	http://isac-net.org/PDFS/90/9090600d-19be-460d-83fc-f8a8b004e0f9.pdf
+
+	Public attributes:
+		filepath: str (read-only property): Absolute path to FCS file on disk.
+		version: str (read-only property): FCS version of parsed file.
+		keywords: dict (read-only property): FCS keywords and values parsed
+			from the TEXT segment.
+		par: int (read-only property): Number of paramters, equal to value of
+			$PAR keyword.
+		channels: pandas.DataFrame (read-only property): Data frame with
+			channels in rows and all $Pn? keywords in columns. Values are
+			parsed versions of keyword values.
+		channel_names: list of str (read-only property): $PnN property
+			for each channel.
+		tot: int (read-only property): Total number of events, equal to value
+			of $TOT keyword.
+
+	Public methods:
+		read_data: Reads the actual data from the file into a numpy.ndarray.
 	"""
 
 	def __init__(self, path):
