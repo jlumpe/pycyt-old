@@ -33,6 +33,9 @@ class FCSFile(object):
 			for each channel.
 		tot: int (read-only property): Total number of events, equal to value
 			of $TOT keyword.
+		spillover: numpy.ndarray (read-only property): Parsed value of
+			$SPILLOVER keyword, expanded and rearranged to cover all channels
+			and in the correct order.
 
 	Public methods:
 		read_data: Reads the actual data from the file into a numpy.ndarray.
@@ -74,6 +77,10 @@ class FCSFile(object):
 		return self._tot
 
 	def read_data(self, slice1=None, slice2=None, fmt='matrix', systype=True):
+	@property
+	def spillover(self):
+		return self._spillover
+
 		"""
 		Reads data from the file. A slice of events may be selected.
 
@@ -323,6 +330,9 @@ class FCSFile(object):
 	def _handle_keywords(self):
 		"""Parses and validates other important keyword values"""
 
+		# Number of channels/parameters
+		self._par = int(self._keywords['$PAR'])
+
 		# Create channels dataframe
 		self._create_channels_df()
 
@@ -422,14 +432,61 @@ class FCSFile(object):
 				'Error parsing "{0}": $DATATYPE="{1}" not supported'
 				.format(self._path, mode))
 
+		# Read in spillover matrix
+		# $SPILLOVER was introduces in FCS3.1 as an official keyword,
+		# is sometimes just "SPILL" in FCS3.0 (BD cytometers)
+		if '$SPILLOVER' in self._keywords:
+			spill_str = self._keywords['$SPILLOVER']
+		elif 'SPILL' in self._keywords:
+			spill_str = self._keywords['SPILL']
+		else:
+			spill_str = None
+
+		if spill_str is not None:
+
+			# If any errors encountered while parsing, simply warn
+			try:
+				# Values separated by commas
+				spill_values = spill_str.split(',')
+
+				# First value is integer number of channels in matrix
+				n = int(spill_values[0])
+				assert 0 < n <= self._par
+				assert len(spill_values) == 1 + n + n**2
+
+				# Channel names in next n values (matchin $PnN)
+				spill_channels = spill_values[1:n+1]
+				spill_ch_idx = [list(self._channels['$PnN']).index(ch)
+					for ch in spill_channels]
+
+				# Create identity matrix for ALL parameters, in case
+				# $SPILLOVER only specifies a subset
+				spill_matrix = np.identity(self._par)
+
+				# Final n^2 values are the matrix in row-major order
+				for r in range(n):
+					for c in range(n):
+						value = float(spill_values[1 + (r + 1) * n + c])
+						# Diagonals should all be 1.0
+						if r == c: assert value == 1.0
+						spill_matrix[spill_ch_idx[r], spill_ch_idx[c]] = value
+
+				self._spillover = spill_matrix
+
+			except Exception as e:
+				# Warn
+				warnings.warn(
+					'Error parsing spillover matrix in "{0}": {1}: {2}'
+					.format(self._path, type(e).__name__, e))
+
+		else:
+			self._spillover = None
+
 	def _create_channels_df(self):
 		"""
 		Creates a pandas.DataFrame describing channel attributes from
 		keywords
 		"""
-
-		# Number of channels/parameters
-		self._par = int(self._keywords['$PAR'])
 
 		# Create empty table
 		self._channels = pd.DataFrame({
