@@ -1,3 +1,4 @@
+import os
 import re
 
 import numpy as np
@@ -64,6 +65,11 @@ class FlowFrame(object):
 				self._data = None
 			else:
 				self._data = self._load_data()
+
+			# Auto-name from file
+			if kwargs.get('ID') is None:
+				kwargs['ID'] = os.path.splitext(os.path.basename(
+					self._fcsfile.filepath))[0]
 
 		# From np.ndarray
 		elif from_ == 'array':
