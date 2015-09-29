@@ -76,11 +76,17 @@ class FCSFile(object):
 	def tot(self):
 		return self._tot
 
-	def read_data(self, slice1=None, slice2=None, fmt='matrix', systype=True):
 	@property
 	def spillover(self):
 		return self._spillover
 
+	def read_data(
+			self,
+			slice1=None,
+			slice2=None,
+			fmt='matrix',
+			systype=True,
+			comp=False):
 		"""
 		Reads data from the file. A slice of events may be selected.
 
@@ -99,7 +105,13 @@ class FCSFile(object):
 				ones for current system. Basically this means swapping the
 				byte order if needed. This results in a dtype equivalent to
 				one of np.float32, np.float64, np.uint8, np.uint16, np.uint32,
-				or np.uint64. Only applies when fmt=="matrix"
+				or np.uint64. Only applies when fmt=="matrix".
+			comp: bool|numpy.ndarray. Compensation matrix to apply to data.
+				Matrix may be given explicitly as numpy ndarray (typically
+				square, but technically just the number of rows needs to
+				match the number of channels). If passed True, the matrix will
+				be calculated as the pseudoinverse of the spillover matrix.
+				If argument is false no compensation will be performed.
 
 		Returns:
 			numpy.ndarray. For fmt=="matrix", a two-dimensional array with
@@ -148,6 +160,25 @@ class FCSFile(object):
 					# Replace variable with new view interpeting the order
 					# correctly
 					data = data.newbyteorder()
+
+			# Compensation
+			if isinstance(comp, np.ndarray):
+				if comp.ndim != 2 or comp.shape[0] != self._par:
+					raise ValueError(
+						'Compensation matrix must be two-dimensional with '
+						'{0} columns'
+						.format(self._par))
+				data = data.dot(comp)
+			elif comp is True:
+				if self._spillover is None:
+					raise RuntimeError(
+						'Compensation matrix not present in file')
+				data = data.dot(np.linalg.pinv(self._spillover))
+			elif comp is not None and comp is not False:
+				raise TypeError(
+					'Comp argument must be bool, numpy.ndarray, or None, not '
+					' {0}'
+					.format(type(comp)))
 
 			return data
 
@@ -354,7 +385,10 @@ class FCSFile(object):
 			self._byteord = 'big'
 			ordchar = '>'
 		else:
-			raise FCSReadError(path=self._path)
+			# Mixed byte orders present in FCS3.0, unsupported
+			raise FCSReadError(
+				'Error parsing "{0}": unsupported $BYTEORD "{1}"'
+				.format(self._path, self._keywords['$BYTEORD']))
 
 		# Check data type and determine information needed to read the data
 		self._datatype = self._keywords['$DATATYPE']
