@@ -61,10 +61,24 @@ class FlowFrame(object):
 			self._par = self._fcsfile.par
 			self._channel_names = self._fcsfile.channel_names
 
+			# comp argument for FCSFile.read_data()
+			if isinstance(kwargs.get('comp'), np.ndarray):
+				compensation = kwargs['comp']
+			elif kwargs.get('comp') == 'auto':
+				if self._fcsfile.spillover is not None:
+					compensation = True
+				else:
+					compensation = False
+			else:
+				compensation = False
+
+			# Load data if not lazy
 			if self._lazy:
 				self._data = None
+				self._compensation = compensation
 			else:
-				self._data = self._load_data()
+				self._data = self._load_data(comp=compensation)
+				self._compensation = False
 
 			# Auto-name from file
 			if kwargs.get('ID') is None:
@@ -82,6 +96,7 @@ class FlowFrame(object):
 				columns=self._channel_names)
 
 			self._par = int(self._data.shape[1]) # from long
+			self._compensation = False
 
 		# From pands.DataFrame
 		elif from_ == 'dataframe':
@@ -93,6 +108,7 @@ class FlowFrame(object):
 			self._channel_names = list(self._data.columns)
 
 			self._par = int(self._data.shape[1]) # from long
+			self._compensation = False
 
 		else:
 			raise ValueError(from_)
@@ -103,7 +119,7 @@ class FlowFrame(object):
 			self._ID = self._auto_ID()
 
 	@classmethod
-	def from_file(cls, path, lazy=False, ID=None):
+	def from_file(cls, path, lazy=False, ID=None, comp=None):
 		"""
 		Create from FCS file on disk.
 
@@ -113,12 +129,32 @@ class FlowFrame(object):
 				is accessed instead of being stored in memory.
 			ID: str|None. String ID for FlowFrame. If none one will be created
 				automatically.
+			comp: None|numpy.ndarray|"auto". Compensation matrix to be applied
+				to data when loading from file. If given explicitly must be
+				square array with size matching number of columns. If "auto"
+				the matrix will be calculated from the spillover matrix in the
+				file if it is present. If the file has no spillover matrix
+				no compensation will be performed.
 
 		Returns:
 			pycyt.FlowFrame
 		"""
+		# Open file
 		fcsfile = FCSFile(path)
-		return cls('fcsfile', fcsfile=fcsfile, lazy=lazy, ID=ID)
+
+		# Check compensation
+		if isinstance(comp, np.ndarray):
+			if comp.shape != (fcsfile.par, fcsfile.par):
+				raise ValueError('Compensation matrix has incompatible shape')
+		elif comp == 'auto':
+			if fcsfile.spillover is None:
+				raise ValueError(
+					'FCS file must specify spillover matrix for auto '
+					'compensation')
+		elif comp is not None:
+			raise ValueError('Invalid value for comp argument')
+
+		return cls('fcsfile', fcsfile=fcsfile, lazy=lazy, ID=ID, comp=comp)
 
 	@classmethod
 	def from_array(cls, array, channels, ID=None):
@@ -280,7 +316,10 @@ class FlowFrame(object):
 		cls._next_ID += 1
 		return ID
 
-	def _load_data(self):
+	def _load_data(self, comp=None):
 		"""Loads data from linked fcs file into pandas.DataFrame"""
-		return pd.DataFrame(self._fcsfile.read_data(fmt='matrix'),
-			columns=self._channel_names)
+		if comp is None:
+			comp = self._compensation
+		matrix = self._fcsfile.read_data(fmt='matrix',
+			comp=comp)
+		return pd.DataFrame(matrix, columns=self._channel_names)
