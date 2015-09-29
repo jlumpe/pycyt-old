@@ -523,26 +523,26 @@ class FCSFile(object):
 		"""
 
 		# Create empty table
-		self._channels = pd.DataFrame({
-			'$PnB': pd.Series(dtype=int),    # Bits reserved for parameter
-			'$PnN': pd.Series(dtype=str),    # Short name
-			'$PnR': pd.Series(dtype=int),    # Range
-			'$PnE': pd.Series(dtype=object), # Amplification type (float, float)
-			'$PnF': pd.Series(dtype=int),    # Optional - optical filter
-			'$PnL': pd.Series(dtype=object), # Optional - exitation wavelengths
-			'$PnS': pd.Series(dtype=str),    # Optional - long name
-			'$PnT': pd.Series(dtype=str),    # Optional - detector type
-			'$PnD': pd.Series(dtype=object), # Optional - visualization scale
-			'$PnG': pd.Series(dtype=float),  # Optional - gain
-			'$PnO': pd.Series(dtype=float),  # Optional - excitation power
-			'$PnP': pd.Series(dtype=float),  # Optional - percent light collected
-			'$PnV': pd.Series(dtype=float),  # Optional - detector voltage
-			})
+		self._channels = pd.DataFrame.from_items([
+			('$PnN', pd.Series(dtype=str)),    # Short name
+			('$PnB', pd.Series(dtype=int)),    # Bits reserved for parameter
+			('$PnE', pd.Series(dtype=object)), # Amplification type (float, float)
+			('$PnR', pd.Series(dtype=int)),    # Range
+			('$PnD', pd.Series(dtype=object)), # Optional - visualization scale
+			('$PnF', pd.Series(dtype=int)),    # Optional - optical filter
+			('$PnG', pd.Series(dtype=float)),  # Optional - gain
+			('$PnL', pd.Series(dtype=object)), # Optional - exitation wavelengths
+			('$PnO', pd.Series(dtype=float)),  # Optional - excitation power
+			('$PnP', pd.Series(dtype=float)),  # Optional - percent light collected
+			('$PnS', pd.Series(dtype=str)),    # Optional - long name
+			('$PnT', pd.Series(dtype=str)),    # Optional - detector type
+			('$PnV', pd.Series(dtype=float))   # Optional - detector voltage
+			])
 
 		# Fill data frame
-		for n in range(1, self._par + 1):
+		for i in range(0, self._par):
 
-			prefix = '$P' + str(n)
+			prefix = '$P' + str(i + 1)
 
 			row = dict()
 
@@ -589,4 +589,4 @@ class FCSFile(object):
 				row['$PnV'] = np.nan
 
 			# Add row
-			self._channels.loc[row['$PnN']] = row
+			self._channels.loc[i] = row
