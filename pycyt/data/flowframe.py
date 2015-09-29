@@ -39,10 +39,9 @@ class FlowFrame(object):
 			data matrix.
 
 	Public methods:
-		from_file (class method): Create from a file on disk
-		from_array (class method): Create from numpy.ndarray and channel names
-		from_dataframe (class method): Create from pandas.DataFrame
-		copy: Creates a copy with the same data
+		copy(): Creates a new DataFrame with copy of this one's data.
+		filter(): Creates a new DataFrame with subset of this one's
+			rows/events. Supports several indexing methods.
 
 	"""
 
