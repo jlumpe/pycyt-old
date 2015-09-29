@@ -61,3 +61,23 @@ def pd_index_positions(data, which):
 			'Invalid type for "which" argument: {0}'
 			.format(type(which)))
 
+def cyclepairs(seq):
+	"""
+	For a given sequence s of length n (taken to be cyclical), yields all
+	pairs of adjacent elements [(s[0], s[1]), (s[1], s[2]), ...,
+	(s[n-2], s[n-1]), (s[n-1], s[0])]. Yields nothing for sequences of length
+	one or zero.
+	"""
+	i = iter(seq)
+	try:
+		first = next(i)
+		prev = first
+		cycled = False
+		for e in i:
+			yield (prev, e)
+			prev = e
+			cycled = True
+		if cycled:
+			yield prev, first
+	except StopIteration:
+		pass
