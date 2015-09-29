@@ -1,3 +1,4 @@
+import sys
 import os
 import warnings
 
@@ -32,6 +33,9 @@ class FCSFile(object):
 			for each channel.
 		tot: int (read-only property): Total number of events, equal to value
 			of $TOT keyword.
+		spillover: numpy.ndarray (read-only property): Parsed value of
+			$SPILLOVER keyword, expanded and rearranged to cover all channels
+			and in the correct order.
 
 	Public methods:
 		read_data: Reads the actual data from the file into a numpy.ndarray.
@@ -66,13 +70,23 @@ class FCSFile(object):
 
 	@property
 	def channel_names(self):
-		return self._channels['$PnN']
+		return list(self._channels['$PnN'])
 	
 	@property
 	def tot(self):
 		return self._tot
 
-	def read_data(self, slice1=None, slice2=None, fmt='matrix'):
+	@property
+	def spillover(self):
+		return self._spillover
+
+	def read_data(
+			self,
+			slice1=None,
+			slice2=None,
+			fmt='matrix',
+			systype=True,
+			comp=False):
 		"""
 		Reads data from the file. A slice of events may be selected.
 
@@ -87,6 +101,17 @@ class FCSFile(object):
 				is "F", "D", or "I" with constant bytes per column. Use
 				"events" for when you're operating outside the realm of logic
 				and using differently-sized integer columns.
+			systype: bool. If true, converts data types in memory to native
+				ones for current system. Basically this means swapping the
+				byte order if needed. This results in a dtype equivalent to
+				one of np.float32, np.float64, np.uint8, np.uint16, np.uint32,
+				or np.uint64. Only applies when fmt=="matrix".
+			comp: bool|numpy.ndarray. Compensation matrix to apply to data.
+				Matrix may be given explicitly as numpy ndarray (typically
+				square, but technically just the number of rows needs to
+				match the number of channels). If passed True, the matrix will
+				be calculated as the pseudoinverse of the spillover matrix.
+				If argument is false no compensation will be performed.
 
 		Returns:
 			numpy.ndarray. For fmt=="matrix", a two-dimensional array with
@@ -125,7 +150,37 @@ class FCSFile(object):
 
 		# Read in matrix format
 		if fmt == 'matrix':
-			return self._read_matrix(offset, nevents)
+			data = self._read_matrix(offset, nevents)
+
+			# Convert to correct byte order
+			if systype:
+				if sys.byteorder == 'little' and data.dtype.byteorder != '<':
+					# This swaps bytes in-place in memory
+					data.byteswap(True)
+					# Replace variable with new view interpeting the order
+					# correctly
+					data = data.newbyteorder()
+
+			# Compensation
+			if isinstance(comp, np.ndarray):
+				if comp.ndim != 2 or comp.shape[0] != self._par:
+					raise ValueError(
+						'Compensation matrix must be two-dimensional with '
+						'{0} columns'
+						.format(self._par))
+				data = data.dot(comp)
+			elif comp is True:
+				if self._spillover is None:
+					raise RuntimeError(
+						'Compensation matrix not present in file')
+				data = data.dot(np.linalg.pinv(self._spillover))
+			elif comp is not None and comp is not False:
+				raise TypeError(
+					'Comp argument must be bool, numpy.ndarray, or None, not '
+					' {0}'
+					.format(type(comp)))
+
+			return data
 
 		# Read in events format
 		if fmt == 'events':
@@ -306,6 +361,9 @@ class FCSFile(object):
 	def _handle_keywords(self):
 		"""Parses and validates other important keyword values"""
 
+		# Number of channels/parameters
+		self._par = int(self._keywords['$PAR'])
+
 		# Create channels dataframe
 		self._create_channels_df()
 
@@ -327,7 +385,10 @@ class FCSFile(object):
 			self._byteord = 'big'
 			ordchar = '>'
 		else:
-			raise FCSReadError(path=self._path)
+			# Mixed byte orders present in FCS3.0, unsupported
+			raise FCSReadError(
+				'Error parsing "{0}": unsupported $BYTEORD "{1}"'
+				.format(self._path, self._keywords['$BYTEORD']))
 
 		# Check data type and determine information needed to read the data
 		self._datatype = self._keywords['$DATATYPE']
@@ -405,36 +466,83 @@ class FCSFile(object):
 				'Error parsing "{0}": $DATATYPE="{1}" not supported'
 				.format(self._path, mode))
 
+		# Read in spillover matrix
+		# $SPILLOVER was introduces in FCS3.1 as an official keyword,
+		# is sometimes just "SPILL" in FCS3.0 (BD cytometers)
+		if '$SPILLOVER' in self._keywords:
+			spill_str = self._keywords['$SPILLOVER']
+		elif 'SPILL' in self._keywords:
+			spill_str = self._keywords['SPILL']
+		else:
+			spill_str = None
+
+		if spill_str is not None:
+
+			# If any errors encountered while parsing, simply warn
+			try:
+				# Values separated by commas
+				spill_values = spill_str.split(',')
+
+				# First value is integer number of channels in matrix
+				n = int(spill_values[0])
+				assert 0 < n <= self._par
+				assert len(spill_values) == 1 + n + n**2
+
+				# Channel names in next n values (matchin $PnN)
+				spill_channels = spill_values[1:n+1]
+				spill_ch_idx = [list(self._channels['$PnN']).index(ch)
+					for ch in spill_channels]
+
+				# Create identity matrix for ALL parameters, in case
+				# $SPILLOVER only specifies a subset
+				spill_matrix = np.identity(self._par)
+
+				# Final n^2 values are the matrix in row-major order
+				for r in range(n):
+					for c in range(n):
+						value = float(spill_values[1 + (r + 1) * n + c])
+						# Diagonals should all be 1.0
+						if r == c: assert value == 1.0
+						spill_matrix[spill_ch_idx[r], spill_ch_idx[c]] = value
+
+				self._spillover = spill_matrix
+
+			except Exception as e:
+				# Warn
+				warnings.warn(
+					'Error parsing spillover matrix in "{0}": {1}: {2}'
+					.format(self._path, type(e).__name__, e))
+
+		else:
+			self._spillover = None
+
 	def _create_channels_df(self):
 		"""
 		Creates a pandas.DataFrame describing channel attributes from
 		keywords
 		"""
 
-		# Number of channels/parameters
-		self._par = int(self._keywords['$PAR'])
-
 		# Create empty table
-		self._channels = pd.DataFrame({
-			'$PnB': pd.Series(dtype=int),    # Bits reserved for parameter
-			'$PnN': pd.Series(dtype=str),    # Short name
-			'$PnR': pd.Series(dtype=int),    # Range
-			'$PnE': pd.Series(dtype=object), # Amplification type (float, float)
-			'$PnF': pd.Series(dtype=int),    # Optional - optical filter
-			'$PnL': pd.Series(dtype=object), # Optional - exitation wavelengths
-			'$PnS': pd.Series(dtype=str),    # Optional - long name
-			'$PnT': pd.Series(dtype=str),    # Optional - detector type
-			'$PnD': pd.Series(dtype=object), # Optional - visualization scale
-			'$PnG': pd.Series(dtype=float),  # Optional - gain
-			'$PnO': pd.Series(dtype=float),  # Optional - excitation power
-			'$PnP': pd.Series(dtype=float),  # Optional - percent light collected
-			'$PnV': pd.Series(dtype=float),  # Optional - detector voltage
-			})
+		self._channels = pd.DataFrame.from_items([
+			('$PnN', pd.Series(dtype=str)),    # Short name
+			('$PnB', pd.Series(dtype=int)),    # Bits reserved for parameter
+			('$PnE', pd.Series(dtype=object)), # Amplification type (float, float)
+			('$PnR', pd.Series(dtype=int)),    # Range
+			('$PnD', pd.Series(dtype=object)), # Optional - visualization scale
+			('$PnF', pd.Series(dtype=int)),    # Optional - optical filter
+			('$PnG', pd.Series(dtype=float)),  # Optional - gain
+			('$PnL', pd.Series(dtype=object)), # Optional - exitation wavelengths
+			('$PnO', pd.Series(dtype=float)),  # Optional - excitation power
+			('$PnP', pd.Series(dtype=float)),  # Optional - percent light collected
+			('$PnS', pd.Series(dtype=str)),    # Optional - long name
+			('$PnT', pd.Series(dtype=str)),    # Optional - detector type
+			('$PnV', pd.Series(dtype=float))   # Optional - detector voltage
+			])
 
 		# Fill data frame
-		for n in range(1, self._par + 1):
+		for i in range(0, self._par):
 
-			prefix = '$P' + str(n)
+			prefix = '$P' + str(i + 1)
 
 			row = dict()
 
@@ -481,4 +589,4 @@ class FCSFile(object):
 				row['$PnV'] = np.nan
 
 			# Add row
-			self._channels.loc[row['$PnN']] = row
+			self._channels.loc[i] = row
