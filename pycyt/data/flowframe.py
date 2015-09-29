@@ -363,6 +363,18 @@ class FlowFrame(object):
 		else:
 			return pd_index_positions(self.data, idx)
 
+	def __contains__(self, item):
+		"""
+		For a single string, checks if it is one of the FlowFrame's channel
+		names. For a collection, checks if all its items are a channel name.
+		"""
+		if isinstance(item, basestring):
+			return item in self._channel_names
+		elif hasattr(item, '__iter__'):
+			return all(ch in self._channel_names for ch in item)
+		else:
+			return False
+
 	def copy(self, ID=None):
 		"""
 		Creates a new FlowFrame with copy of this one's data. The copy will
