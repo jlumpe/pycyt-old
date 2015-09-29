@@ -185,7 +185,7 @@ class FlowFrame(object):
 		self._lazy = False
 		self._compensation = False
 
-	def _init_from_dataframe(cls, dataframe):
+	def _init_from_dataframe(self, dataframe):
 
 		# Everything is in the DataFrame
 		self._data = dataframe
