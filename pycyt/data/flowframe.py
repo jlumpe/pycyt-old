@@ -12,11 +12,8 @@ class FlowFrame(object):
 	A container for flow data. Has all the basic attributes of an FCS file,
 	but may or may not actually be backed by one on the disk. Suports lazy
 	loading of data from file only when accessed. This class has the same
-	name as the equivalent in the Biocondutor R package because I am
+	name as the equivalent in the Bioconductor R package because I am
 	uncreative.
-
-	This class generally shouldn't be instantiated directly, instead the class
-	methods from_file(), from_array(), or from_dataframe() should be used.
 
 	Public attributes:
 		ID: str (read-only property). (Probably unique) string identifier
@@ -30,10 +27,11 @@ class FlowFrame(object):
 			on disk, the FCSFile instance describing that file.
 		lazy: bool. Whether data is lazy-loaded from disk when accessed.
 		keywords: dict (read-only property): FCS keywords and values.
-		par: int (read-only property): Number of paramters/channels
+		par: int (read-only property): Number of parameters/channels
 		channels: pandas.DataFrame (read-only property): Data frame with
-			channels in rows and all $Pn? FCS keywords in columns. Filled in
-			automatically if 
+			channels in rows and all $Pn? FCS keywords in columns. Matches
+			actual keyword values if FlowFrame is from file, otherwise
+			populated automatically.
 		channel_names: list of str (read-only property): $PnN property
 			for each channel.
 		tot: int|long (read-only property): Total number of events, rows of
@@ -51,157 +49,153 @@ class FlowFrame(object):
 	_next_ID = 1
 
 	def __init__(self, from_, **kwargs):
-		"""Don't use this directly"""
-		# From FCS file
-		if from_ == 'fcsfile':
-
-			self._fcsfile = kwargs['fcsfile']
-			self._lazy = kwargs['lazy']
-
-			self._par = self._fcsfile.par
-			self._channel_names = self._fcsfile.channel_names
-
-			# comp argument for FCSFile.read_data()
-			if isinstance(kwargs.get('comp'), np.ndarray):
-				compensation = kwargs['comp']
-			elif kwargs.get('comp') == 'auto':
-				if self._fcsfile.spillover is not None:
-					compensation = True
-				else:
-					compensation = False
-			else:
-				compensation = False
-
-			# Load data if not lazy
-			if self._lazy:
-				self._data = None
-				self._compensation = compensation
-			else:
-				self._data = self._load_data(comp=compensation)
-				self._compensation = False
-
-			# Auto-name from file
-			if kwargs.get('ID') is None:
-				kwargs['ID'] = os.path.splitext(os.path.basename(
-					self._fcsfile.filepath))[0]
-
-		# From np.ndarray
-		elif from_ == 'array':
-
-			self._fcsfile = None
-			self._lazy = False
-
-			self._channel_names = kwargs['channels']
-			self._data = pd.DataFrame(kwargs['array'],
-				columns=self._channel_names)
-
-			self._par = int(self._data.shape[1]) # from long
-			self._compensation = False
-
-		# From pands.DataFrame
-		elif from_ == 'dataframe':
-
-			self._fcsfile = None
-			self._lazy = False
-
-			self._data = kwargs['dataframe']
-			self._channel_names = list(self._data.columns)
-
-			self._par = int(self._data.shape[1]) # from long
-			self._compensation = False
-
-		else:
-			raise ValueError(from_)
-
-		if kwargs.get('ID') is not None:
-			self._ID = kwargs['ID']
-		else:
-			self._ID = self._auto_ID()
-
-	@classmethod
-	def from_file(cls, path, lazy=False, ID=None, comp=None):
 		"""
-		Create from FCS file on disk.
+		Flexible constructor from several different types. Additional
+		arguments vary based on value of the first:
 
-		Args:
-			path: str. Path to FCS file.
-			lazy: bool. If true, data will be loaded from file every time it
-				is accessed instead of being stored in memory.
-			ID: str|None. String ID for FlowFrame. If none one will be created
-				automatically.
-			comp: None|numpy.ndarray|"auto". Compensation matrix to be applied
-				to data when loading from file. If given explicitly must be
-				square array with size matching number of columns. If "auto"
-				the matrix will be calculated from the spillover matrix in the
-				file if it is present. If the file has no spillover matrix
-				no compensation will be performed.
+		Common args:
+			ID: str, optional. String ID for FlowFrame. If not given one will
+			be created automatically.
 
-		Returns:
-			pycyt.FlowFrame
+		From file path:
+			from_: str. Path to FCS file to load.
+			lazy: bool, optional. If true, data will be loaded from file every
+				time it is accessed instead of being stored in memory.
+				Defaults to False.
+			comp: None|numpy.ndarray|"auto", optional. Compensation matrix to
+				be applied to data when loading from file. If given explicitly
+				must be square array with size matching number of columns. If
+				"auto" the matrix will be calculated from the spillover matrix
+				in the file if it is present. If the file has no spillover
+				matrix no compensation will be performed. Defaults to None.
+
+		From FCSFile:
+			from_: FCSFile instance. Works similarly to giving file path.
+			All arguments identical to loading from file path.
+
+		From numpy.ndarray:
+			from_: numpy.ndarray, two-dimensional. Data with events in
+				rows and channels in columns.
+			channels: list of str. Unique names of channels, same length as
+				size of second dimension of array.
+
+		From pandas.DataFrame:
+			from_: pands.DataFrame with events in rows and channels as
+				columns.
 		"""
-		# Open file
-		fcsfile = FCSFile(path)
 
-		# Check compensation
+		# Get ID if given
+		if 'ID' in kwargs:
+			ID = kwargs.pop('ID')
+			if not isinstance(ID, basestring):
+				raise TypeError('ID must be string')
+		else:
+			ID = None
+
+		# From file path
+		if isinstance(from_, basestring):
+			fcsfile = FCSFile(from_)
+			self._init_from_file(fcsfile, **kwargs)
+
+		# From FCSFile object
+		elif isinstance(from_, FCSFile):
+			self._init_from_file(from_, **kwargs)
+
+		# From numpy.ndarray
+		elif isinstance(from_, np.ndarray):
+			self._init_from_array(from_, **kwargs)
+
+		# From pandas.DataFrame
+		elif isinstance(from_, pd.DataFrame):
+			self._init_from_dataframe(from_, **kwargs)
+
+		# Bad argument
+		else:
+			raise TypeError(
+				'Invalid type for "from_" argument: {0}'
+				.format(type(from_)))
+
+		# Figure out default ID if needed
+		if ID is None:
+			if self.filepath is not None:
+				self._ID = os.path.splitext(os.path.basename(
+					self.filepath))[0]
+			else:
+				self._ID = self._auto_ID()
+		else:
+			self._ID = ID
+
+	def _init_from_file(self, fcsfile, lazy=False, comp=None):
+
+		# Basic attributes
+		self._fcsfile = fcsfile
+		self._lazy = lazy
+
+		self._par = self._fcsfile.par
+		self._channel_names = self._fcsfile.channel_names
+
+		# Comp argument for FCSFile.read_data()
 		if isinstance(comp, np.ndarray):
 			if comp.shape != (fcsfile.par, fcsfile.par):
 				raise ValueError('Compensation matrix has incompatible shape')
+			compensation = comp
 		elif comp == 'auto':
-			if fcsfile.spillover is None:
-				raise ValueError(
-					'FCS file must specify spillover matrix for auto '
-					'compensation')
-		elif comp is not None:
-			raise ValueError('Invalid value for comp argument')
+			if self._fcsfile.spillover is not None:
+				compensation = True
+			else:
+				compensation = False
+		elif comp is None:
+			compensation = False
+		else:
+			raise ValueError(
+				'Invalid value for comp argument: {0}'
+				.format(comp))
 
-		return cls('fcsfile', fcsfile=fcsfile, lazy=lazy, ID=ID, comp=comp)
+		# Load data now if not lazy
+		if self._lazy:
+			self._data = None
+			self._compensation = compensation
+		else:
+			self._data = self._load_data(comp=compensation)
+			self._compensation = False
 
-	@classmethod
-	def from_array(cls, array, channels, ID=None):
-		"""
-		Create from numpy.ndarray and channel names
+	def _init_from_array(self, array, channels=None):
 
-		Args:
-			array: numpy.ndarray, two-dimensional.
-			channels: list of str. Unique names of channels, same length as
-				size of second dimension of array.
-			ID: str|None. String ID for FlowFrame. If none one will be created
-				automatically.
-
-		Returns:
-			pycyt.FlowFrame
-		"""
-		if not isinstance(array, np.ndarray):
-			raise TypeError('Array must be numpy.ndarray')
+		# Check array
 		if array.ndim != 2:
 			raise ValueError('Array must be two-dimensional')
 
+		# Check channels
+		if channels is None:
+			raise ValueError(
+				'Channels argument required when creating from numpy.ndarray')
 		channels = list(map(str, channels))
 		if len(channels) != array.shape[1]:
 			raise ValueError('Number of channels must match array dimensions')
 		if len(set(channels)) != len(channels):
-			raise ValueError('Chanel names must be unique')
+			raise ValueError('Channel names must be unique')
 
-		return cls('array', array=array, channels=channels, ID=ID)
+		# Create DataFrame
+		self._channel_names = channels
+		self._data = pd.DataFrame(array, columns=self._channel_names)
+		self._par = int(self._data.shape[1]) # from long
 
-	@classmethod
-	def from_dataframe(cls, dataframe, ID=None):
-		"""
-		Create from numpy.ndarray and channel names
+		# Not backed by file
+		self._fcsfile = None
+		self._lazy = False
+		self._compensation = False
 
-		Args:
-			dataframe: pands.DataFrame with events in rows and channels as
-				columns.
-			ID: str|None. String ID for FlowFrame. If none one will be created
-				automatically.
+	def _init_from_dataframe(cls, dataframe):
 
-		Returns:
-			pycyt.FlowFrame
-		"""
-		if not isinstance(dataframe, pd.DataFrame):
-			raise TypeError('dataframe must be pandas.DataFrame')
+		# Everything is in the DataFrame
+		self._data = dataframe
+		self._channel_names = list(self._data.columns)
+		self._par = int(self._data.shape[1]) # from long
 
-		return cls('dataframe', dataframe=array, ID=ID)
+		# Not backed by file
+		self._fcsfile = None
+		self._lazy = False
+		self._compensation = False
 
 	@property
 	def ID(self):
