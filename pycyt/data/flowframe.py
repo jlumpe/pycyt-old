@@ -294,6 +294,12 @@ class FlowFrame(object):
 		"""
 		Creates a new FlowFrame with copy of this one's data. The copy will
 		not be linked to the same FCS file.
+
+		Args:
+			ID: ID of newly created FlowFrame.
+
+		Returns:
+			pycyt.FlowFrame
 		"""
 		if ID is None:
 			match = re.match(r'^(.*-copy)(\d*)$', self._ID)
@@ -302,6 +308,61 @@ class FlowFrame(object):
 			else:
 				ID = self._ID + '-copy'
 		return FlowFrame.from_dataframe(self.data.copy(), ID=ID)
+
+	def filter(self, which, **kwargs):
+		"""
+		Creates a new FlowFrame from a *subset* of this one's events. The
+		data is copied (changing the new data wont' affect the old) and the
+		new FlowFrame won't be linked to the same FCS file.
+
+		Args:
+			which: One of several types, which different behavior for each:
+				slice: slices row range with standard slice behavior
+				pandas.Series: either integer dtype to select rows by index or
+					bool dtype to select rows where index is True.
+				numpy.ndarray: 1D, with same behavior as pandas.Series
+				list: same behavior as pandas.Series
+			**kwargs: Additional named arguments to pass to FlowFrame
+				constructor when creating from pandas.DataFrame
+
+		Returns:
+			pycyt.FlowFrame
+		"""
+		# Get data (if lazy loading, want to avoid accessing this attribute
+		# twice)
+		data = self.data
+
+		if isinstance(which, slice):
+			df = data[which]
+		elif isinstance(which, (pd.Series, np.ndarray)):
+			if which.dtype.kind == 'i': # Integer row indices
+				df = data.iloc[which]
+			elif which.dtype.kind == 'b': # Boolean selection
+				df = data[which]
+			else:
+				raise TypeError('Invalid dtype for "which" argument')
+		elif isinstance(which, list):
+			if isinstance(which[0], (int, long)): # Integer row indices
+				df = data.iloc[which]
+			elif isinstance(which[0], bool): # Boolean selection
+				df = data[which]
+			else:
+				raise TypeError('List elements must be int or bool')
+		else:
+			raise TypeError(
+				'Invalid type for "which" argument: {0}'
+				.format(type(which)))
+
+		# Some indexing methods return a *view* on the original data, meaning
+		# changes to one will affect the other. We don't want this.
+		if df.values.base is data.values.base:
+			df = df.copy()
+
+		# Reset indices to sequential integers
+		df.index = xrange(df.shape[0])
+
+		# Create from DataFrame and any additional arguments
+		return FlowFrame(df, **kwargs)
 
 	@classmethod
 	def _auto_ID(cls):
