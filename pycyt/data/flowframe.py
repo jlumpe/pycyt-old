@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from pycyt.io import FCSFile
+from pycyt.util import pd_index_positions
 
 
 class FlowFrame(object):
@@ -317,6 +318,7 @@ class FlowFrame(object):
 
 		Args:
 			which: One of several types, which different behavior for each:
+				int: single row/event
 				slice: slices row range with standard slice behavior
 				pandas.Series: either integer dtype to select rows by index or
 					bool dtype to select rows where index is True.
@@ -332,26 +334,8 @@ class FlowFrame(object):
 		# twice)
 		data = self.data
 
-		if isinstance(which, slice):
-			df = data[which]
-		elif isinstance(which, (pd.Series, np.ndarray)):
-			if which.dtype.kind == 'i': # Integer row indices
-				df = data.iloc[which]
-			elif which.dtype.kind == 'b': # Boolean selection
-				df = data[which]
-			else:
-				raise TypeError('Invalid dtype for "which" argument')
-		elif isinstance(which, list):
-			if isinstance(which[0], (int, long)): # Integer row indices
-				df = data.iloc[which]
-			elif isinstance(which[0], bool): # Boolean selection
-				df = data[which]
-			else:
-				raise TypeError('List elements must be int or bool')
-		else:
-			raise TypeError(
-				'Invalid type for "which" argument: {0}'
-				.format(type(which)))
+		# Get filtered data frame
+		df = pd_index_positions(data, which)
 
 		# Some indexing methods return a *view* on the original data, meaning
 		# changes to one will affect the other. We don't want this.
