@@ -278,7 +278,7 @@ class FlowFrame(object):
 
 	@property
 	def channel_names(self):
-		return self._channel_names
+		return self._channel_names[:]
 	
 	@property
 	def tot(self):
