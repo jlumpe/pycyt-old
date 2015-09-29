@@ -291,6 +291,79 @@ class FlowFrame(object):
 	def __repr__(self):
 		return '<{0} {1}>'.format(type(self).__name__, repr(self._ID))
 
+	def __getitem__(self, idx):
+		"""
+		Convenience method for indexing the data attribute. Supports several
+		argument types:
+			Channel indexing:
+				string: Gets data for single channel as pandas.Series.
+				list of strings: Filter subset of channels.
+			Row/Event indexing:
+				int: single row/event
+				slice: slices row range with standard slice behavior
+				pandas.Series: either integer dtype to select rows by index or
+					bool dtype to select rows where index is True.
+				numpy.ndarray: 1D, with same behavior as pandas.Series
+				list of int or bool: same behavior as pandas.Series
+			Mixed indexing:
+				tuple: 2-tuple of row index and channel index. In this case
+					row index must match above. Channel index can match above,
+					or be int or list of ints to get channels by position.
+					This is based off of indexing of a data.frame in R.
+
+		Returns:
+			pandas.DataFrame, or pandas.Series if single channel selected.
+		"""
+		# String - single channel
+		if isinstance(idx, basestring):
+			return self.data[idx]
+
+		# List - ambiguous, need to check contents
+		elif isinstance(idx, list):
+
+			# Of strings - subset of channels
+			if isinstance(idx[0], basestring):
+				return self.data[idx]
+
+			# Otherwise assume ints or bools to index rows
+			else:
+				return pd_index_positions(self.data, idx)
+
+		# Tuple - rows and channels
+		elif isinstance(idx, tuple):
+
+			rows, channels = idx
+
+			# Get correct channels first
+			if isinstance(channels, basestring): # Channel name
+				df = self.data[channels]
+			elif isinstance(channels, (int, long)): # Channel index
+				df = self.data[self._channel_names[channels]]
+			elif isinstance(channels, list):
+				if isinstance(channels[0], basestring): # List of names
+					df = self.data[channels]
+				elif isinstance(channels[0], (int, long)): # List of indices
+					df = self.data[[self._channel_names[i] for i in channels]]
+				else:
+					raise TypeError(
+						'Second index must contain channel names or '
+						'positions')
+			elif channels is None:
+				df = self.data
+			else:
+				raise TypeError(
+					'Second index must contain channel names or positions')
+
+			# Now index rows
+			if rows is None:
+				return df
+			else:
+				return pd_index_positions(df, rows)
+
+		# Other - assume int, pandas.Series or numpy.ndarray
+		else:
+			return pd_index_positions(self.data, idx)
+
 	def copy(self, ID=None):
 		"""
 		Creates a new FlowFrame with copy of this one's data. The copy will
