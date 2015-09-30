@@ -70,7 +70,7 @@ class AbstractGate(object):
 
 		# FlowFrame
 		if isinstance(events, FlowFrame):
-			array = FlowFrame.data[self._channels].values
+			array = events.data[self._channels].values
 			passed = self._contains(array, region)
 			return events.filter(passed)
 
@@ -135,7 +135,7 @@ class AbstractGate(object):
 
 		# FlowFrame
 		if isinstance(events, FlowFrame):
-			array = FlowFrame.data[self._channels].values
+			array = events.data[self._channels].values
 
 		# Pandas DataFrame
 		elif isinstance(events, pd.DataFrame):
