@@ -60,7 +60,7 @@ class PolyGate(SimpleGate):
 				cp = dp[:,0] * dv[1] - dp[:,1] * dv[0]
 
 				# Reject where cp isn't positive (or negative if left-handed)
-				contains &= (cp > 0) ^ self.is_rh
+				contains &= (cp > 0) ^ self._is_rh
 
 		# Non-convex is slower (there is probably a faster way though)
 		else:
