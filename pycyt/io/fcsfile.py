@@ -26,11 +26,11 @@ class FCSFile(object):
 			from the TEXT segment.
 		par: int (read-only property): Number of paramters, equal to value of
 			$PAR keyword.
-		channels: pandas.DataFrame (read-only property): Data frame with
+		channels: list of str (read-only property): $PnN property
+			for each channel.
+		channel_info: pandas.DataFrame (read-only property): Data frame with
 			channels in rows and all $Pn? keywords in columns. Values are
 			parsed versions of keyword values.
-		channel_names: list of str (read-only property): $PnN property
-			for each channel.
 		tot: int (read-only property): Total number of events, equal to value
 			of $TOT keyword.
 		spillover: numpy.ndarray (read-only property): Parsed value of
@@ -66,11 +66,11 @@ class FCSFile(object):
 
 	@property
 	def channels(self):
-		return self._channels
+		return list(self._channel_info['$PnN'])
 
 	@property
-	def channel_names(self):
-		return list(self._channels['$PnN'])
+	def channel_info(self):
+		return self._channel_info
 	
 	@property
 	def tot(self):
@@ -232,7 +232,7 @@ class FCSFile(object):
 			data = np.ndarray((nevents, self._par), dtype=dtype)
 
 			# Copy data column-by-column
-			for c, name in enumerate(self.channel_names):
+			for c, name in enumerate(self.channels):
 				data[:,c] = events[name]
 
 			return data
@@ -241,7 +241,7 @@ class FCSFile(object):
 		"""Reads data in events format (heterogeneous data types)"""
 
 		# Numpy composite data type for each event
-		event_dtype = np.dtype(zip(self.channel_names, self._channel_dtypes))
+		event_dtype = np.dtype(zip(self.channels, self._channel_dtypes))
 
 		# Read data from file
 		with open(self._path, 'rb') as fh:
@@ -250,7 +250,7 @@ class FCSFile(object):
 
 		# Apply integer masks as needed
 		if self._datatype == 'I':
-			for ch_name, mask, dtype in zip(self.channel_names,
+			for ch_name, mask, dtype in zip(self.channels,
 					self._int_masks, self._channel_dtypes):
 				if mask is not None:
 					data[ch_name] &= np.asarray([mask], dtype=dtype)
@@ -396,7 +396,7 @@ class FCSFile(object):
 		# F datatype is 32-bit float as per FCS3.1 spec
 		if self._datatype == 'F':
 
-			if not all(bits == 32 for bits in self._channels['$PnB']):
+			if not all(bits == 32 for bits in self._channel_info['$PnB']):
 				raise FCSReadError(
 					'Error parsing "{0}": $PnB must be 32 for all '
 					'parameters if $DATATYPE is F'
@@ -410,7 +410,7 @@ class FCSFile(object):
 		# D datatype is 64-bit float as per FCS3.1 spec
 		elif self._datatype == 'D':
 
-			if not all(bits == 64 for bits in self._channels['$PnB']):
+			if not all(bits == 64 for bits in self._channel_info['$PnB']):
 				raise FCSReadError(
 					'Error parsing "{0}": $PnB must be 64 for all '
 					'parameters if $DATATYPE is D'
@@ -426,7 +426,7 @@ class FCSFile(object):
 
 			# Support only 8, 16, 32, and 64-bit integers
 			supported_bits = [8, 16, 32, 64]
-			if any(b not in supported_bits for b in self._channels['$PnB']):
+			if any(b not in supported_bits for b in self._channel_info['$PnB']):
 				raise FCSReadError(
 					'Error parsing "{0}": integer sizes other than {1}-bit '
 					'not supported.'
@@ -435,7 +435,7 @@ class FCSFile(object):
 
 			# Bytes per channel
 			self._channel_bytes = [bits / 8
-				for bits in self._channels['$PnB']]
+				for bits in self._channel_info['$PnB']]
 
 			# Numpy dtype string per channel
 			self._channel_dtypes = [ordchar + 'u' + b
@@ -446,7 +446,7 @@ class FCSFile(object):
 
 			# Caluclate bit masks
 			self._int_masks = []
-			for ch in self._channels.iterrows():
+			for ch in self._channel_info.iterrows():
 				range_ = ch['$PnR']
 				bits = ch['$PnB']
 				if range_ == (1 << bits):
@@ -490,7 +490,7 @@ class FCSFile(object):
 
 				# Channel names in next n values (matchin $PnN)
 				spill_channels = spill_values[1:n+1]
-				spill_ch_idx = [list(self._channels['$PnN']).index(ch)
+				spill_ch_idx = [list(self._channel_info['$PnN']).index(ch)
 					for ch in spill_channels]
 
 				# Create identity matrix for ALL parameters, in case
@@ -523,7 +523,7 @@ class FCSFile(object):
 		"""
 
 		# Create empty table
-		self._channels = pd.DataFrame.from_items([
+		self._channel_info = pd.DataFrame.from_items([
 			('$PnN', pd.Series(dtype=str)),    # Short name
 			('$PnB', pd.Series(dtype=int)),    # Bits reserved for parameter
 			('$PnE', pd.Series(dtype=object)), # Amplification type (float, float)
@@ -589,4 +589,4 @@ class FCSFile(object):
 				row['$PnV'] = np.nan
 
 			# Add row
-			self._channels.loc[i] = row
+			self._channel_info.loc[i] = row
