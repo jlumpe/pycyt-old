@@ -28,12 +28,12 @@ class FlowFrame(object):
 		lazy: bool. Whether data is lazy-loaded from disk when accessed.
 		keywords: dict (read-only property): FCS keywords and values.
 		par: int (read-only property): Number of parameters/channels
-		channels: pandas.DataFrame (read-only property): Data frame with
+		channels: list of str (read-only property): $PnN property
+			for each channel.
+		channel_info: pandas.DataFrame (read-only property): Data frame with
 			channels in rows and all $Pn? FCS keywords in columns. Matches
 			actual keyword values if FlowFrame is from file, otherwise
 			populated automatically.
-		channel_names: list of str (read-only property): $PnN property
-			for each channel.
 		tot: int|long (read-only property): Total number of events, rows of
 			data matrix.
 
@@ -131,7 +131,7 @@ class FlowFrame(object):
 		self._lazy = lazy
 
 		self._par = self._fcsfile.par
-		self._channel_names = self._fcsfile.channel_names
+		self._channels = self._fcsfile.channels
 
 		# Comp argument for FCSFile.read_data()
 		if isinstance(comp, np.ndarray):
@@ -175,8 +175,8 @@ class FlowFrame(object):
 			raise ValueError('Channel names must be unique')
 
 		# Create DataFrame
-		self._channel_names = channels
-		self._data = pd.DataFrame(array, columns=self._channel_names)
+		self._channels = channels
+		self._data = pd.DataFrame(array, columns=self._channels)
 		self._par = int(self._data.shape[1]) # from long
 
 		# Not backed by file
@@ -188,7 +188,7 @@ class FlowFrame(object):
 
 		# Everything is in the DataFrame
 		self._data = dataframe
-		self._channel_names = list(self._data.columns)
+		self._channels = list(self._data.columns)
 		self._par = int(self._data.shape[1]) # from long
 
 		# Not backed by file
@@ -217,10 +217,10 @@ class FlowFrame(object):
 			if value.ndim != 2 or value.shape[1] != self._par:
 				raise ValueError('Data array must have compatible shape')
 			self._data = pd.DataFrame(value.copy(),
-				columns=self._channel_names)
+				columns=self._channels)
 
 		elif isinstance(value, pd.DataFrame):
-			if tuple(value.columns) != tuple(self._channel_names):
+			if tuple(value.columns) != tuple(self._channels):
 				raise ValueError('DataFrame must have identical columns')
 			self._data = value.copy()
 
@@ -270,14 +270,14 @@ class FlowFrame(object):
 
 	@property
 	def channels(self):
-		if self._fcsfile is not None:
-			return self._fcsfile.channels
-		else:
-			return None # TODO
+		return self._channels[:]
 
 	@property
-	def channel_names(self):
-		return self._channel_names[:]
+	def channel_info(self):
+		if self._fcsfile is not None:
+			return self._fcsfile.channel_info
+		else:
+			return None # TODO
 	
 	@property
 	def tot(self):
@@ -336,12 +336,12 @@ class FlowFrame(object):
 			if isinstance(channels, basestring): # Channel name
 				df = self.data[channels]
 			elif isinstance(channels, (int, long)): # Channel index
-				df = self.data[self._channel_names[channels]]
+				df = self.data[self._channels[channels]]
 			elif isinstance(channels, list):
 				if isinstance(channels[0], basestring): # List of names
 					df = self.data[channels]
 				elif isinstance(channels[0], (int, long)): # List of indices
-					df = self.data[[self._channel_names[i] for i in channels]]
+					df = self.data[[self._channels[i] for i in channels]]
 				else:
 					raise TypeError(
 						'Second index must contain channel names or '
@@ -368,9 +368,9 @@ class FlowFrame(object):
 		names. For a collection, checks if all its items are a channel name.
 		"""
 		if isinstance(item, basestring):
-			return item in self._channel_names
+			return item in self._channels
 		elif hasattr(item, '__iter__'):
-			return all(ch in self._channel_names for ch in item)
+			return all(ch in self._channels for ch in item)
 		else:
 			return False
 
@@ -444,4 +444,4 @@ class FlowFrame(object):
 			comp = self._compensation
 		matrix = self._fcsfile.read_data(fmt='matrix',
 			comp=comp)
-		return pd.DataFrame(matrix, columns=self._channel_names)
+		return pd.DataFrame(matrix, columns=self._channels)
