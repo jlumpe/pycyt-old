@@ -68,8 +68,6 @@ class EllipseGate(EllipsoidGate):
 		r[0, 1] = -r[1, 0]
 		r[1, 1] = r[0, 0]
 
-		print r
-
 		m = r.dot(np.diag(self._axes))
 		cov = m.dot(m.transpose())
 
