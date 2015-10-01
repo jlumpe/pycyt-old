@@ -90,7 +90,7 @@ class AbstractGate(object):
 				return events.iloc[passed]
 
 		# Numpy array - assume column in same order as channels
-		elif isinstance(events, numpy.ndarray):
+		elif isinstance(events, np.ndarray):
 
 			# 2D array
 			if events.ndim == 2:
@@ -149,7 +149,7 @@ class AbstractGate(object):
 				array = events.values[:,np.newaxis]
 
 		# Numpy array - assume column in same order as channels
-		elif isinstance(events, numpy.ndarray):
+		elif isinstance(events, np.ndarray):
 
 			# 2D array
 			if events.ndim == 2:
