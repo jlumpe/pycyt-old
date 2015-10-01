@@ -40,6 +40,10 @@ class PolyGate(SimpleGate):
 	def is_convex(self):
 		return self._is_convex
 
+	@property
+	def vertices(self):
+		return self._vertices[:]
+
 	def _inside(self, array):
 
 		contains = np.full(array.shape[0], True, dtype=np.bool)
