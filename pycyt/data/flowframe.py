@@ -5,9 +5,10 @@ import numpy as np
 import pandas as pd
 
 from pycyt.io import FCSFile
+from pycyt.util import AutoIDMixin
 
 
-class FlowFrame(object):
+class FlowFrame(AutoIDMixin):
 	"""
 	A container for flow data. Has all the basic attributes of an FCS file,
 	but may or may not actually be backed by one on the disk. Suports lazy
@@ -43,9 +44,6 @@ class FlowFrame(object):
 			rows/events. Supports several indexing methods.
 
 	"""
-
-	# Keep track of next automatic numeric ID
-	_next_ID = 1
 
 	def __init__(self, from_, **kwargs):
 		"""
@@ -430,13 +428,6 @@ class FlowFrame(object):
 
 		# Create from DataFrame and any additional arguments
 		return FlowFrame(df, **kwargs)
-
-	@classmethod
-	def _auto_ID(cls):
-		"""Automatically creates a unique ID string for a new instance"""
-		ID = cls.__name__ + str(cls._next_ID)
-		cls._next_ID += 1
-		return ID
 
 	def _load_data(self, comp=None):
 		"""Loads data from linked fcs file into pandas.DataFrame"""

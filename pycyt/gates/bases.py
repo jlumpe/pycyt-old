@@ -2,9 +2,10 @@ import numpy as np
 import pandas as pd
 
 from pycyt import FlowFrame
+from pycyt.util import AutoIDMixin
 
 
-class AbstractGate(object):
+class AbstractGate(AutoIDMixin):
 	"""
 	Abstract base class for a flow cytometry gate object.
 
@@ -25,7 +26,7 @@ class AbstractGate(object):
 		if isinstance(ID, basestring):
 			self._ID = ID
 		elif ID is None:
-			self._ID = self._auto_id()
+			self._ID = self._auto_ID()
 		else:
 			raise TypeError('ID must be string, not {0}'.format(type(ID)))
 
@@ -38,6 +39,10 @@ class AbstractGate(object):
 				'Invalid default region {0}'
 				.format(default_region))
 		self._default_region = default_region
+
+	@property
+	def ID(self):
+		return self._ID
 
 	@property
 	def channels(self):
@@ -185,7 +190,8 @@ class AbstractGate(object):
 		raise NotImplementedError()
 
 	def __repr__(self):
-		return '<{0} on {1}>'.format(type(self).__name__, repr(self.channels))
+		return '<{0} {1} on {2}>'.format(type(self).__name__,
+			repr(self._ID), repr(self.channels))
 
 	# Bitwise operators on gates return CompositeGate or InvertedGates
 	def __and__(self, other):
@@ -199,9 +205,6 @@ class AbstractGate(object):
 
 	def _contains(self, array, region):
 		raise NotImplementedError()
-
-	def _auto_id(self):
-		return 'some id'
 
 
 class SimpleGate(AbstractGate):
