@@ -391,7 +391,7 @@ class FlowFrame(object):
 				ID = match.group(1) + str(int(match.group(2) or 1) + 1)
 			else:
 				ID = self._ID + '-copy'
-		return FlowFrame.from_dataframe(self.data.copy(), ID=ID)
+		return FlowFrame(self.data.copy(), ID=ID)
 
 	def filter(self, which, **kwargs):
 		"""
