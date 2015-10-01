@@ -181,7 +181,7 @@ class AbstractGate(object):
 	def count(self, events, region=None):
 		return np.sum(self.contains(events, region))
 
-	def with_default(self, default_region):
+	def copy(self, **kwargs):
 		raise NotImplementedError()
 
 	def __repr__(self):
@@ -225,7 +225,7 @@ class SimpleGate(AbstractGate):
 	
 	def __invert__(self):
 		other_region = 'out' if self._default_region == 'in' else 'out'
-		return self.with_default(default_region=other_region)
+		return self.copy(default_region=other_region)
 
 
 class CompositeGate(SimpleGate):
@@ -263,7 +263,7 @@ class InvertedGate(SimpleGate):
 		return self._invert_gate.contains(array, self._invert_region)
 
 	def __invert__(self):
-		return self._invert_gate.with_region(self._invert_region)
+		return self._invert_gate.copy(region=self._invert_region)
 
 	def __repr__(self):
 		gatestr = repr(self._invert_gate)

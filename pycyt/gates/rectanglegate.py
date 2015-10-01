@@ -5,11 +5,11 @@ from bases import SimpleGate
 
 class RectangleGate(SimpleGate):
 
-	def __init__(self, ranges, channels, **kwargs):
+	def __init__(self, channels, ranges, **kwargs):
 
 		super(RectangleGate, self).__init__(channels, **kwargs)
 
-		if len(ranges) != len(channels):
+		if len(ranges) != self.ndim:
 			raise ValueError('Number of ranges must match number of channels')
 
 		self._ranges = []
