@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 
 from pycyt.io import FCSFile
-from pycyt.util import pd_index_positions
 
 
 class FlowFrame(object):
@@ -326,7 +325,7 @@ class FlowFrame(object):
 
 			# Otherwise assume ints or bools to index rows
 			else:
-				return pd_index_positions(self.data, idx)
+				return self.data.iloc[idx]
 
 		# Tuple - rows and channels
 		elif isinstance(idx, tuple):
@@ -357,11 +356,11 @@ class FlowFrame(object):
 			if rows is None:
 				return df
 			else:
-				return pd_index_positions(df, rows)
+				return df.iloc[rows]
 
 		# Other - assume int, pandas.Series or numpy.ndarray
 		else:
-			return pd_index_positions(self.data, idx)
+			return self.data.iloc[idx]
 
 	def __contains__(self, item):
 		"""
@@ -419,7 +418,7 @@ class FlowFrame(object):
 		data = self.data
 
 		# Get filtered data frame
-		df = pd_index_positions(data, which)
+		df = data.iloc[which]
 
 		# Some indexing methods return a *view* on the original data, meaning
 		# changes to one will affect the other. We don't want this.
