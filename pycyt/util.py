@@ -1,3 +1,5 @@
+import collections
+
 import numpy as np
 import pandas as pd
 
@@ -61,23 +63,31 @@ def pd_index_positions(data, which):
 			'Invalid type for "which" argument: {0}'
 			.format(type(which)))
 
-def cyclepairs(seq):
+def cycle_adjacent(seq, n):
 	"""
-	For a given sequence s of length n (taken to be cyclical), yields all
-	pairs of adjacent elements [(s[0], s[1]), (s[1], s[2]), ...,
-	(s[n-2], s[n-1]), (s[n-1], s[0])]. Yields nothing for sequences of length
-	one or zero.
+	For a given sequence (taken to be cyclical), yields all n-tuples of
+	consecutive elements. For example, cycle_adjacent(range(5), 3) returns
+	[(0, 1, 2), (1, 2, 3), (2, 3, 4), (3, 4, 0), (4, 0, 1)].
+	Yields nothing for sequences of length less than n.
 	"""
 	i = iter(seq)
-	try:
-		first = next(i)
-		prev = first
-		cycled = False
-		for e in i:
-			yield (prev, e)
-			prev = e
-			cycled = True
-		if cycled:
-			yield prev, first
-	except StopIteration:
-		pass
+	start = collections.deque(maxlen=n)
+	for j in range(n):
+		try:
+			start.append(next(i))
+		except StopIteration:
+			return
+	q = collections.deque(start, maxlen=n)
+	while True:
+		yield tuple(q)
+		try:
+			e = next(i)
+		except StopIteration:
+			break
+		q.popleft()
+		q.append(e)
+	for j in range(n-1):
+		q.popleft()
+		q.append(start.popleft())
+		yield tuple(q)
+
