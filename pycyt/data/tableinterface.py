@@ -91,7 +91,7 @@ class TableInterface(object):
 			self._type = 'pd.series'
 			self._nrow = len(self._table)
 			if self._ncol is None:
-				self._ncol = len(table)
+				self._ncol = 1
 			elif self._ncol != 1:
 				raise ValueError(
 					'pandas.Series cannot be interpreted as a table with '
@@ -115,7 +115,7 @@ class TableInterface(object):
 				self._type = '1darray'
 				self._nrow = len(self._table)
 				if self._ncol is None:
-					self._ncol = len(table)
+					self._ncol = 1
 				elif self._ncol != 1:
 					raise ValueError(
 						'1D array cannot be interpreted as table with more '
