@@ -285,7 +285,8 @@ class FlowFrame(AutoIDMixin):
 			return self._data.shape[0]
 
 	def __repr__(self):
-		return '<{0} {1}>'.format(type(self).__name__, repr(self._ID))
+		return '<{0} {1}, {2}x{3}>'.format(type(self).__name__,
+			repr(self._ID), self.par, self.tot)
 
 	def __getitem__(self, idx):
 		"""

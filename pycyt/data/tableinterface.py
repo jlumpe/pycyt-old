@@ -63,14 +63,16 @@ class TableInterface(object):
 						'Column names do not match channels in {0}'
 						.format(repr(table))
 						)
-			elif self._ncol is None:
-				self._ncol = table.par
-			elif self._ncol != table.par:
-				raise ValueError(
-					'Number of columns does not match number of channels in '
-					'{0}'
-					.format(repr(table))
-					)
+			else:
+				self._column_names = table.channels
+				if self._ncol is None:
+					self._ncol = table.par
+				elif self._ncol != table.par:
+					raise ValueError(
+						'Number of columns does not match number of channels '
+						'in {0}'
+						.format(repr(table))
+						)
 
 		# Pandas DataFrame
 		elif isinstance(table, pd.DataFrame):
@@ -80,11 +82,13 @@ class TableInterface(object):
 				if not all(cn in table.columns for cn in self._column_names):
 					raise KeyError(
 						'Column names do not match columns in DataFrame')
-			elif self._ncol is None:
-				self._ncol = table.shape[1]
-			elif self._ncol != table.shape[1]:
-				raise ValueError(
-					'Number of columns in DataFrame does not match')
+			else:
+				self._column_names = table.columns
+				if self._ncol is None:
+					self._ncol = table.shape[1]
+				elif self._ncol != table.shape[1]:
+					raise ValueError(
+						'Number of columns in DataFrame does not match')
 
 		# Pandas Series
 		elif isinstance(table, pd.Series):
