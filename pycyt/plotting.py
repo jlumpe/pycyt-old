@@ -1,11 +1,20 @@
+import os
+
 import numpy as np
 from scipy import ndimage
 import matplotlib as mpl
 from matplotlib import pyplot as plt
+from pkg_resources import resource_filename
 
 from pycyt.data import TableInterface
 from pycyt.transforms import (transform as apply_transform,
 	parse_transform_arg, parse_transforms_list)
+
+
+rcfile = os.path.realpath(resource_filename('pycyt', 'matplotlibrc'))
+
+def use_style():
+	mpl.style.use(rcfile)
 
 
 class ScaleMapper(object):
@@ -94,13 +103,18 @@ def density2d(
 
 	hist, xedges, yedges = bin2d(data, transform, range=range, bins=bins)
 
+	if kwargs.pop('log', False):
+		img_hist = np.ma.array(np.log(hist), mask=(hist==0)).transpose()
+	else:
+		img_hist = np.ma.array(hist, mask=(hist==0)).transpose()
+
 	extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
 
 	imgargs = dict(origin='lower', extent=extent, interpolation='none',
-		aspect='auto')
+		aspect='auto', cmap='afmhot')
 	imgargs.update(kwargs)
 
-	img = ax.imshow(hist.transpose(), **imgargs)
+	img = ax.imshow(img_hist, **imgargs)
 
 	if labels is not None:
 		ax.set_xlabel(labels[0])
