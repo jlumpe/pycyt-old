@@ -44,6 +44,14 @@ class PolyGate(SimpleGate):
 	def vertices(self):
 		return self._vertices[:]
 
+	def copy(self, channels=None, vertices=None, **kwargs):
+		if channels is None:
+			channels = self._channels
+		if vertices is None:
+			vertices = self._vertices
+
+		return PolyGate(channels, vertices, **kwargs)
+
 	def _inside(self, array):
 
 		contains = np.full(array.shape[0], True, dtype=np.bool)

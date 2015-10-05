@@ -1,4 +1,4 @@
-from bases import AbstractGate, SimpleGate, CompositeGate, InvertedGate
+from bases import AbstractGate, SimpleGate, BooleanGate, InvertedGate
 
 from rectanglegate import RectangleGate
 from polygate import PolyGate

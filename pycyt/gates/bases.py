@@ -96,13 +96,13 @@ class AbstractGate(AutoIDMixin):
 		return '<{0} {1} on {2}>'.format(type(self).__name__,
 			repr(self._ID), repr(self.channels))
 
-	# Bitwise operators on gates return CompositeGate or InvertedGates
+	# Bitwise operators on gates return BooleanGate or InvertedGates
 	def __and__(self, other):
-		return CompositeGate([self, other], 'and')
+		return BooleanGate([self, other], 'and')
 	def __or__(self, other):
-		return CompositeGate([self, other], 'or')
+		return BooleanGate([self, other], 'or')
 	def __xor__(self, other):
-		return CompositeGate([self, other], 'xor')
+		return BooleanGate([self, other], 'xor')
 	def __invert__(self):
 		return InvertedGate(self)
 
@@ -159,12 +159,12 @@ class SimpleGate(AbstractGate):
 		return self.copy(default_region=other_region)
 
 
-class CompositeGate(SimpleGate):
+class BooleanGate(SimpleGate):
 	"""
 	docs...
 	"""
 
-	def __init__(self, gates, op, ID=None):
+	def __init__(self, gates, op, **kwargs):
 
 		# Check value of op argument
 		if op not in ['and', 'or', 'xor']:
@@ -173,11 +173,73 @@ class CompositeGate(SimpleGate):
 
 		# Check all gates have the same channels
 		channels = next(iter(gates)).channels
-		if not all(set(gate) == set(channels) for gate in gates):
-			raise ValueError()
+		if not all(set(gate.channels) == set(channels) for gate in gates):
+			raise ValueError(
+				'All gates in BooleanGate must be defined on the same '
+				'channels')
 
 		# Parent constructor
-		super(CompositeGate, self).__init__(channels, ID)
+		super(BooleanGate, self).__init__(channels, **kwargs)
+
+		# Flatten composite gates
+		self._gates = []
+		for gate in gates:
+			if isinstance(gate, BooleanGate):
+				self._gates += gate.gates
+			else:
+				self._gates.append(gate)
+
+		# Channel permutations
+		self._ch_perm = []
+		for gate in self._gates:
+			if gate.channels == self.channels:
+				self._ch_perm.append(None)
+			else:
+				self._ch_perm = [gate.channels.index(c) for c
+					in self._channels]
+
+	@property
+	def gates(self):
+		return self._gates[:]
+
+	@property
+	def op(self):
+		return self._op
+
+	def copy(self, gates=None, op=None, **kwargs):
+		if gates is None:
+			gates = self._gates
+		if op is None:
+			op = self._op
+
+		return BooleanGate(gates, op, **kwargs)
+
+	def _inside(self, array):
+
+		# Initialize array with op identity
+		if self._op == 'and':
+			in_composite = np.full(array.shape[0], True, dtype=np.bool)
+		else:
+			in_composite = np.full(array.shape[0], False, dtype=np.bool)
+		
+		# Loop through gates
+		for gate, ch_perm in zip(self._gates, self._ch_perm):
+
+			# Get events in gate
+			if ch_perm is None:
+				in_gate = gate.contains(array)
+			else:
+				in_gate = gate.contains(array[:, ch_perm])
+
+			# Apply op
+			if self._op == 'and':
+				in_composite &= in_gate
+			elif self._op == 'or':
+				in_composite |= in_gate
+			elif self._op == 'xor':
+				in_composite = in_composite != in_gate
+
+		return in_composite
 
 
 class InvertedGate(SimpleGate):

@@ -24,6 +24,14 @@ class RectangleGate(SimpleGate):
 
 			self._ranges.append((bottom, top))
 
+	def copy(self, channels=None, ranges=None, **kwargs):
+		if channels is None:
+			channels = self._channels
+		if ranges is None:
+			ranges = self._ranges
+
+		return RectangleGate(channels, ranges, **kwargs)
+
 	def _inside(self, array):
 
 		contains = np.full(array.shape[0], True, dtype=np.bool)
