@@ -50,41 +50,36 @@ class AbstractTransform(AutoIDMixin):
 			table = TableInterface(x)
 			array = table.data
 
-			# Drop rows which are not in range if needed
+			# Drop rows which are not in domain if needed
 			if drop:
-				in_range = np.all(self.array_in_range(array), axis=1)
-				array = array[in_range]
+				in_domain = np.all(self.array_in_domain(array), axis=1)
+				array = array[in_domain]
 
 			# Get tranformed data
 			transformed = self.apply_array(array)
 			
 			# Return passed table rows in original format
 			if drop:
-				return table.with_data(transformed, in_range)
+				return table.with_data(transformed, in_domain)
 			else:
 				return table.with_data(transformed)
 
-	def in_range(self, x):
+	def in_domain(self, x):
 
 		if np.isscalar(x):
-			return bool(self.array_in_range(np.asarray(x))[()])
+			return bool(self.array_in_domain(np.asarray(x))[()])
 
 		else:
 
 			# Get TableInterface for array
 			table = TableInterface(x)
 
-			# Get rows which are in range
-			return np.all(self.array_in_range(table.data), axis=1)
+			# Get rows which are in domain
+			return np.all(self.array_in_domain(table.data), axis=1)
 
 	def __repr__(self):
 		return '{0}({1})'.format(type(self).__name__,
 			', '.join(k + '=' + repr(v) for k, v in self.kwargs.iteritems()))
-
-	def __add__(self, other):
-		if not isinstance(other, AbstractTransform):
-			raise TypeError(other)
-		return CompoundTransform(self, other)
 
 	@property
 	def label(self):
@@ -93,15 +88,13 @@ class AbstractTransform(AutoIDMixin):
 	@property
 	def kwargs(self):
 		return dict()
+
+	@property
+	def inverse(self):
+		raise NotImplementedError()	
 	
 	def apply_array(self, array):
 		raise NotImplementedError()
 
-	def array_in_range(self, array):
+	def array_in_domain(self, array):
 		raise NotImplementedError()
-
-
-class CompoundTransform(AbstractTransform):
-
-	def __init__(self, *args):
-		pass

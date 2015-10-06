@@ -82,7 +82,7 @@ def transform(data, *args, **kwargs):
 		if asarray:
 			return table.data
 		else:
-			return table
+			return data
 
 	# Get the data as a 2d array
 	array = table.data
@@ -100,13 +100,13 @@ def transform(data, *args, **kwargs):
 		# Parse arguments to transform objects
 		transforms = map(parse_transform_arg, targ)
 
-		# Drop rows not within range of transformation
+		# Drop rows not within domain of transformation
 		if drop:
-			in_range = np.full(table.nrow, True, dtype=np.bool)
+			in_domain = np.full(table.nrow, True, dtype=np.bool)
 			for c, transform in enumerate(transforms):
 				if transform is not None:
-					in_range &= transform.array_in_range(array[:, c])
-			array = array[in_range, :]
+					in_domain &= transform.array_in_domain(array[:, c])
+			array = array[in_domain, :]
 
 		# Perform transformations
 		transformed = array.copy()
@@ -122,8 +122,8 @@ def transform(data, *args, **kwargs):
 
 		# Drop rows
 		if drop:
-			in_range = np.all(transform.array_in_range(array), axis=1)
-			array = array[in_range, :]
+			in_domain = np.all(transform.array_in_domain(array), axis=1)
+			array = array[in_domain, :]
 
 		# Transform array
 		transformed = transform.apply_array(array)
@@ -133,6 +133,6 @@ def transform(data, *args, **kwargs):
 		return transformed
 	else:
 		if drop:
-			return table.with_data(transformed, in_range)
+			return table.with_data(transformed, in_domain)
 		else:
 			return table.with_data(transformed)

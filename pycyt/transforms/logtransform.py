@@ -11,12 +11,14 @@ class LogTransform(AbstractTransform):
 		self._base = b
 		self._decades = d
 		self._top = t
-		self._shift = 1 if s else 0
+		self._shifted = s
+
+		self._scale = 1. / (d * np.log(b))
+		self._shift = -np.log(t) * self._scale
+		if s:
+			self._shift += 1
 
 		self._simple = (d == 1 and t ==1 and not s)
-		self._invtop = 1. / t
-		self._invdec = 1. / d
-		self._scale = t / np.log(b)
 
 	@property
 	def base(self):
@@ -32,12 +34,16 @@ class LogTransform(AbstractTransform):
 
 	@property
 	def shifted(self):
-		return self._shift == 1
+		return self._shifted
 
 	@property
 	def kwargs(self):
 		return dict(b=self._base, d=self._decades, t=self._top,
-			s=self.shifted)
+			s=self._shifted)
+
+	@property
+	def inverse(self):
+		return InvLogTransform(**self.kwargs)
 
 	@property
 	def label(self):
@@ -53,11 +59,54 @@ class LogTransform(AbstractTransform):
 			return super(LogTransform, self).__repr__()
 
 	def apply_array(self, array):
-		if self._simple:
-			return np.log(array) * self._scale
-		else:
-			t = np.log(array * self._invtop) * self._invdec + self._shift
-			return 
+		return np.log(array) * self._scale + self._shift
 
-	def array_in_range(self, array):
+	def array_in_domain(self, array):
 		return array > 0
+
+
+class InvLogTransform(AbstractTransform):
+
+	def __init__(self, b=10, d=1, t=1, s=False):
+		self._base = b
+		self._decades = d
+		self._top = t
+		self._shifted = s
+
+		self._invscale = d * np.log(b)
+		self._shift = -np.log(t) / self._invscale
+		if s:
+			self._shift += 1
+
+		self._simple = (d == 1 and t ==1 and not s)
+
+	@property
+	def base(self):
+		return self._base
+
+	@property
+	def decades(self):
+		return self._decades
+	
+	@property
+	def top(self):
+		return self._top
+
+	@property
+	def shifted(self):
+		return self._shifted
+
+	@property
+	def kwargs(self):
+		return dict(b=self._base, d=self._decades, t=self._top,
+			s=self._shifted)
+
+	@property
+	def inverse(self):
+		return LogTransform(**self.kwargs)
+
+	def apply_array(self, array):
+		return np.exp((array - self._shift) * self._invscale)
+
+	def array_in_domain(self, array):
+		return np.ones_like(array, dtype=np.bool)
