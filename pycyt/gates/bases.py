@@ -60,6 +60,10 @@ class AbstractGate(AutoIDMixin):
 	@property
 	def default_region(self):
 		return self._default_region
+
+	@property
+	def bbox(self):
+		raise NotImplementedError()
 	
 	def __call__(self, events, region=None):
 
@@ -88,6 +92,10 @@ class AbstractGate(AutoIDMixin):
 
 	def count(self, events, region=None):
 		return np.sum(self.contains(events, region))
+
+	def frac(self, events, region=None):
+		inside = self.contains(events, region)
+		return float(np.sum(inside)) / len(inside)
 
 	def copy(self, **kwargs):
 		raise NotImplementedError()

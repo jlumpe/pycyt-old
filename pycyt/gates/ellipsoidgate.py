@@ -39,6 +39,11 @@ class EllipsoidGate(SimpleGate):
 	def cov(self):
 		return self._cov
 
+	@property
+	def bbox(self):
+		radii = np.sqrt(np.diag(self._cov))
+		return [[c-r, c+r] for c, r in zip(self._center, radii)]
+
 	def copy(self, channels=None, center=None, cov=None, **kwargs):
 		if channels is None:
 			channels = self._channels
