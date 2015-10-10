@@ -1,17 +1,52 @@
 # pycyt
 
-**pycyt** is a Python API for the analysis of flow cytometry data. It is intended for users with basic Python knowledge and is based around the [scipy stack](http://www.scipy.org/). The goal of the package is to allow the integration of standard flow data analysis methods (file IO, compensation, gating, etc.) with the powerful numerical and scientific computing tools available in Python, or to allow users to easily write their own.
+**pycyt** is a Python API for the analysis of high-throughput flow cytometry data.
+
+It is currently in the early stages of development. See below for a list of current and planned features.
+
+
+### What does it do?
+
+The purpose of the package is to allow for the integration of standard flow data analysis methods (file IO, compensation, gating, etc.) with the many powerful numerical and scientific computing tools available in Python, or to allow users to easily write their own.
+
+To this end, **pycyt** provides a simple and flexible API to manipulate flow data and expose it as common Python data types. It is based around the [scipy stack](http://www.scipy.org/) and so should work nicely with many other tools right out the box.
+
+**pycyt** is intended for users with basic Python knowledge.
+
+
+### What doesn't it do?
+
+Currently, there is no built-in GUI. This is an API, not an application. A level of interactivity is available if used in an environment like [IPython](http://ipython.org/), which enables interactive plots, and it is built with this in mind.
+
+Instead of being a replacement for, say, FlowJo, **pycyt** could instead be used to load a FlowJo workspace and then perform a more complicated custom analysis on populations you have already defined.
+
+Eventually, a GUI app with file IO, plotting, and gating will be a feature. This will not come until most of the basic features are in place, though.
+
+
+### Examples
 
 If you just want to see it in action, jump over to the [examples](pycyt/examples/) page. Otherwise continue below for features, requirements, and installation instructions.
 
-Note that **pycyt** is currently in the early stages of development. See below for a list of current and planned features.
-
-
 ### Design goals
 
-* **Simplicity** - common operations like loading a file, compensating, gating, or showing a plot require a single concise function call with few parameters needed. An emphasis is placed on interactivity with the [IPython console](https://ipython.org/ipython-doc/3/interactive/qtconsole.html) in mind, making exploratory data analysis easy.
-* **Flexibility** - the package is based around the [scipy stack](http://www.scipy.org/), which is already the standard for scientific and numerical computing in Python. The goal here is to do all the flow-specific work for you and then let you perform as complex an analysis as you want using the tools you already know. Importantly, components of the package can be as tightly or loosely coupled as you want - you should be able to gate on a generic `numpy.ndarray` or pandas `DataFrame` just as easily as the specialized flow data container object.
-* **Interoperability** - Support for the [Gating-ML](http://flowcyt.sourceforge.net/gating/) standard, so you can import and export your gates, transformations, and compensation matrices to and from other tools. Importing from FlowJo workspace files is also planned.
+##### Simplicity
+
+Common operations like loading a file, compensating, gating, or showing a plot require a single concise function call with few parameters needed.
+
+An emphasis is placed on interactivity with the [IPython console](https://ipython.org/ipython-doc/3/interactive/qtconsole.html) in mind, making exploratory data analysis easy.
+
+##### Flexibility
+
+The package is based around the [scipy stack](http://www.scipy.org/), which is already the standard for scientific and numerical computing in Python. The goal here is to do all the flow-specific work for you and then let you perform as complex an analysis as you want using the tools you already know.
+
+Importantly, components of the package can be as tightly or loosely coupled as you want - you should be able to gate on a generic `numpy.ndarray` or pandas `DataFrame` just as easily as the specialized flow data container object.
+
+
+##### Interoperability
+
+Support for the [Gating-ML](http://flowcyt.sourceforge.net/gating/) standard, so you can import and export your gates, transformations, and compensation matrices to and from other tools. Importing from FlowJo workspace files is also planned.
+
+&nbsp;
 
 Currently **pycyt**'s main focus is on ease of use and portability rather than speed, and it is written in pure Python. Since it is based off of numpy performance shouldn't be too shabby, though. Performance optimizations are made whenever possible to keep things snappy, and it currently seems to be fast enough for real-time analysis.
 
@@ -20,24 +55,23 @@ Currently **pycyt**'s main focus is on ease of use and portability rather than s
 
 #### Current
 
-* Low-level API to read single FCS files. Supports getting raw data as a numpy array and parses other metadata into accessible native Python objects. Supports the FCS3.1 standard explicitly, seems to work fine for 3.0. Haven't tried FCS2.x files yet.
-* Ability to apply compensation when loading data, either from explicit matrix or from matrix calculated from spillover matrix in file.
-* Higher-level `FlowFrame` container for flow data and metadata that may be derived from a file on disk, or created from a `numpy.ndarray` or `pandas.DataFrame`. If linked to a file on disk, can enable lazy-loading so data is only read from file when needed and is not stored in memory otherwise.
-* Support for the standard set of common Flow Cytometry transformations - log, hyperlog [WIP], asinh, etc.
-* Support for standard set of gates: range/rectangle (N-dimensional), quadrant (generalized, N-dimensional [WIP]), polygon (2D), ellipsoid (N-dimensional), composite/boolean gates.
-* Easy plotting with matplotlib: 1d histogram, 2d density plot, matrix plots combining these. Can also overlay gates on plots. Note - the plotting functions are currently experimental and usage will likely change.
+* **Read FCS files** - gets raw data as a numpy array and parses other metadata into accessible native Python objects. Supports the FCS3.1 standard explicitly, seems to work fine for 3.0. Haven't tried FCS2.x files yet.
+* **Flexible data container** - high-level `FlowFrame` container for flow data that may have been loaded from disk or created by other means. If linked to a file on disk, can enable lazy-loading so data is only read from file when needed and is not stored in memory otherwise.
+* **Compensation** - either from explicit matrix or from spillover matrix in file.
+* **Transformations** - log, hyperlog [WIP], asinh, etc. Customizable parameters and easy API for creating your own.
+* **Gates** - range/rectangle (N-dimensional), quadrant (generalized, N-dimensional [WIP]), polygon (2D), ellipsoid (N-dimensional), composite/boolean gates.
+* **Plotting** - easy plotting with matplotlib: 1d histogram, 2d density plot, matrix plots combining these. Can also overlay gates on plots. Note - the plotting functions are currently experimental and usage will likely change.
 
 
 #### Goals
 
-* Explicit support for FCS3.0 (should already work but there might be some minor caveats), maybe earlier versions.
-* Ability to save `FlowFrame`s to disk in proper FCS3.1 format.
+* Explicit support for FCS3.0, maybe earlier versions. Ability to save `FlowFrame`s to disk in proper FCS3.1 format.
 * Gating-ML support to read and write transformations, gates, and compensation to and from XML for compatibility with many other tools.
-* Grouping FCS files/samples into a collection for high-throughput analysis. Give each file a unique ID, run analyses in parallel. Create by loading all files in a directory. Assign additional metadata to each sample in table-like format, such as row/column in plate.
-* Gate trees formed by nesting gates in a hierarchy. Ability to select a sub-population by path from root like `gate_tree.subpopulation(my_flowframe, ['Live', 'Lymphocytes', 'CD3+ T Cells'])`.
+* Grouping FCS files/samples into a collection for easy parallel analysis. 
+* Gate trees formed by nesting gates in a hierarchy.
 * Serialization of all objects for saving to and loading from disk.
-* Import from FlowJo file. It's a proprietary format but the workspace is actually just an XML document with fairly simple structure. Gates and transformations conform to the Gating-ML standard already.
-* Eventually, an interactive environment to view plots and perhaps also create and modify gates. Ability to easily navigate between files and sub-populations, change plot type or channels. Implemented with desktop GUI package (Tk, PyQt, GTK...) or perhaps web interface.
+* Import from FlowJo file.
+* Eventually, an interactive environment to view plots and create and modify gates. Implemented with desktop GUI package (Tk, PyQt, GTK...) or perhaps web interface.
 
 
 ### Alternatives
