@@ -2,9 +2,11 @@ import numpy as np
 import pandas as pd
 
 from pycyt import FlowFrame
+from pycyt.util import AutoIDMixin
+from pycyt.data import TableInterface
 
 
-class AbstractGate(object):
+class AbstractGate(AutoIDMixin):
 	"""
 	Abstract base class for a flow cytometry gate object.
 
@@ -25,7 +27,7 @@ class AbstractGate(object):
 		if isinstance(ID, basestring):
 			self._ID = ID
 		elif ID is None:
-			self._ID = self._auto_id()
+			self._ID = self._auto_ID()
 		else:
 			raise TypeError('ID must be string, not {0}'.format(type(ID)))
 
@@ -38,6 +40,10 @@ class AbstractGate(object):
 				'Invalid default region {0}'
 				.format(default_region))
 		self._default_region = default_region
+
+	@property
+	def ID(self):
+		return self._ID
 
 	@property
 	def channels(self):
@@ -54,154 +60,87 @@ class AbstractGate(object):
 	@property
 	def default_region(self):
 		return self._default_region
+
+	@property
+	def bbox(self):
+		raise NotImplementedError()
 	
 	def __call__(self, events, region=None):
 
 		# Check region
-		if region is None:
-			if self._default_region is not None:
-				region = self._default_region
-			else:
-				raise ValueError('No default region, must give explicitly')
-		elif region not in self._regions:
-			raise ValueError('Invalid region {0}'.format(repr(region)))
+		region = self.__get_region(region)
 
-		# Apply based on type of argument
+		# Get TableInterface for events
+		table = self.__get_table(events)
 
-		# FlowFrame
-		if isinstance(events, FlowFrame):
-			array = events.data[self._channels].values
-			passed = self._contains(array, region)
-			return events.filter(passed)
-
-		# Pandas DataFrame
-		elif isinstance(events, pd.DataFrame):
-			array = events[self._channels].values
-			passed = self._contains(array, region)
-			return events.iloc[passed]
-
-		# Pandas Series - for 1D gates
-		elif isinstance(events, pd.Series):
-			if len(self._channels) != 1:
-				raise ValueError('Can only apply 1D gate to pandas.Series')
-			else:
-				array = events.values[:,np.newaxis]
-				passed = self._contains(array, region)
-				return events.iloc[passed]
-
-		# Numpy array - assume column in same order as channels
-		elif isinstance(events, np.ndarray):
-
-			# 2D array
-			if events.ndim == 2:
-				if events.shape[1] != len(self._channels):
-					raise ValueError(
-						'Number of columns in array must match number of '
-						'channels in gate')
-				else:
-					passed = self._contains(events, region)
-					return events[passed,:]
-
-			# 1D array - for 1D gates
-			elif events.ndim == 1:
-				if len(self._channels) != 1:
-					raise ValueError('Can only apply 1D gate to 1D array')
-				else:
-					array = events.values[:,np.newaxis]
-					passed = self._contains(array, region)
-					return events[passed]
-
-			# Bad shape
-			else:
-				raise ValueError('Array must be 1 or 2-dimensional')
-
-		# Bad type
-		else:
-			raise TypeError('Cannot gate on {0}'.format(type(events)))
+		# Pass/reject rows of table
+		in_gate = self._contains(table.data, region)
 		
+		# Return passed table rows in original format
+		return table.get_rows(in_gate)
 
 	def contains(self, events, region=None):
 
 		# Check region
-		if region is None:
-			if self._default_region is not None:
-				region = self._default_region
-			else:
-				raise ValueError('No default region, must give explicitly')
-		elif region not in self._regions:
-			raise ValueError('Invalid region {0}'.format(repr(region)))
+		region = self.__get_region(region)
 
-		# Get data array based on type of events argument
+		# Get TableInterface for events
+		table = self.__get_table(events)
 
-		# FlowFrame
-		if isinstance(events, FlowFrame):
-			array = events.data[self._channels].values
-
-		# Pandas DataFrame
-		elif isinstance(events, pd.DataFrame):
-			array = events[self._channels].values
-
-		# Pandas Series - for 1D gates
-		elif isinstance(events, pd.Series):
-			if len(self._channels) != 1:
-				raise ValueError('Can only apply 1D gate to pandas.Series')
-			else:
-				array = events.values[:,np.newaxis]
-
-		# Numpy array - assume column in same order as channels
-		elif isinstance(events, np.ndarray):
-
-			# 2D array
-			if events.ndim == 2:
-				if events.shape[1] != len(self._channels):
-					raise ValueError(
-						'Number of columns in array must match number of '
-						'channels in gate')
-				else:
-					array = events
-
-			# 1D array - for 1D gates
-			elif events.ndim == 1:
-				if len(self._channels) != 1:
-					raise ValueError('Can only apply 1D gate to 1D array')
-				else:
-					array = events.values[:,np.newaxis]
-
-			# Bad shape
-			else:
-				raise ValueError('Array must be 1 or 2-dimensional')
-
-		# Bad type
-		else:
-			raise TypeError('Cannot gate on {0}'.format(type(events)))
-
-		# Process array
-		return self._contains(array, region)
+		# Process table
+		return self._contains(table.data, region)
 
 	def count(self, events, region=None):
 		return np.sum(self.contains(events, region))
+
+	def frac(self, events, region=None):
+		inside = self.contains(events, region)
+		return float(np.sum(inside)) / len(inside)
 
 	def copy(self, **kwargs):
 		raise NotImplementedError()
 
 	def __repr__(self):
-		return '<{0} on {1}>'.format(type(self).__name__, repr(self.channels))
+		return '<{0} {1} on {2}>'.format(type(self).__name__,
+			repr(self._ID), repr(self.channels))
 
-	# Bitwise operators on gates return CompositeGate or InvertedGates
+	# Bitwise operators on gates return BooleanGate or InvertedGates
 	def __and__(self, other):
-		return CompositeGate([self, other], 'and')
+		return BooleanGate([self, other], 'and')
 	def __or__(self, other):
-		return CompositeGate([self, other], 'or')
+		return BooleanGate([self, other], 'or')
 	def __xor__(self, other):
-		return CompositeGate([self, other], 'xor')
+		return BooleanGate([self, other], 'xor')
 	def __invert__(self):
 		return InvertedGate(self)
 
 	def _contains(self, array, region):
 		raise NotImplementedError()
 
-	def _auto_id(self):
-		return 'some id'
+	def __get_table(self, events):
+		"""
+		Gets TableInterface for events, if unable raises informative error
+		"""
+		try:
+			return TableInterface(events, self._channels)
+		except KeyError:
+			raise ValueError('All gate channels must be in events argument')
+		except ValueError:
+			raise ValueError('Invalid shape for events argument')
+		except TypeError:
+			raise TypeError('Cannot gate on {0}'.format(type(events)))
+
+	def __get_region(self, region):
+		"""Gets region if allowed, otherwise raises error"""
+		if region is None:
+			if self._default_region is not None:
+				return self._default_region
+			else:
+				raise ValueError('No default region, must give explicitly')
+		elif region not in self._regions:
+			raise ValueError('Invalid region {0}'.format(repr(region)))
+		else:
+			return region
 
 
 class SimpleGate(AbstractGate):
@@ -228,12 +167,12 @@ class SimpleGate(AbstractGate):
 		return self.copy(default_region=other_region)
 
 
-class CompositeGate(SimpleGate):
+class BooleanGate(SimpleGate):
 	"""
 	docs...
 	"""
 
-	def __init__(self, gates, op, ID=None):
+	def __init__(self, gates, op, **kwargs):
 
 		# Check value of op argument
 		if op not in ['and', 'or', 'xor']:
@@ -242,25 +181,86 @@ class CompositeGate(SimpleGate):
 
 		# Check all gates have the same channels
 		channels = next(iter(gates)).channels
-		if not all(set(gate) == set(channels) for gate in gates):
-			raise ValueError()
+		if not all(set(gate.channels) == set(channels) for gate in gates):
+			raise ValueError(
+				'All gates in BooleanGate must be defined on the same '
+				'channels')
 
 		# Parent constructor
-		super(CompositeGate, self).__init__(channels, ID)
+		super(BooleanGate, self).__init__(channels, **kwargs)
+
+		# Flatten composite gates
+		self._gates = []
+		for gate in gates:
+			if isinstance(gate, BooleanGate):
+				self._gates += gate.gates
+			else:
+				self._gates.append(gate)
+
+		# Channel permutations
+		self._ch_perm = []
+		for gate in self._gates:
+			if gate.channels == self.channels:
+				self._ch_perm.append(None)
+			else:
+				self._ch_perm = [gate.channels.index(c) for c
+					in self._channels]
+
+	@property
+	def gates(self):
+		return self._gates[:]
+
+	@property
+	def op(self):
+		return self._op
+
+	def copy(self, gates=None, op=None, **kwargs):
+		if gates is None:
+			gates = self._gates
+		if op is None:
+			op = self._op
+
+		return BooleanGate(gates, op, **kwargs)
+
+	def _inside(self, array):
+
+		# Initialize array with op identity
+		if self._op == 'and':
+			in_composite = np.full(array.shape[0], True, dtype=np.bool)
+		else:
+			in_composite = np.full(array.shape[0], False, dtype=np.bool)
+		
+		# Loop through gates
+		for gate, ch_perm in zip(self._gates, self._ch_perm):
+
+			# Get events in gate
+			if ch_perm is None:
+				in_gate = gate.contains(array)
+			else:
+				in_gate = gate.contains(array[:, ch_perm])
+
+			# Apply op
+			if self._op == 'and':
+				in_composite &= in_gate
+			elif self._op == 'or':
+				in_composite |= in_gate
+			elif self._op == 'xor':
+				in_composite = in_composite != in_gate
+
+		return in_composite
 
 
 class InvertedGate(SimpleGate):
 
-	def __init__(self, gate, region=None, ID=None):
+	def __init__(self, gate, region=None, **kwargs):
 
 		self._invert_gate = gate
 		self._invert_region = region
 
-		super(InvertedGate, self).__init__(gate.channels, default_region='in',
-			ID=ID)
+		super(InvertedGate, self).__init__(gate.channels, **kwargs)
 
 	def _inside(self, array):
-		return self._invert_gate.contains(array, self._invert_region)
+		return ~self._invert_gate.contains(array, self._invert_region)
 
 	def __invert__(self):
 		return self._invert_gate.copy(region=self._invert_region)

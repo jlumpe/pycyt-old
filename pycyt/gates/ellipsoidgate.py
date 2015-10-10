@@ -37,7 +37,22 @@ class EllipsoidGate(SimpleGate):
 
 	@property
 	def cov(self):
-		return self._cov	
+		return self._cov
+
+	@property
+	def bbox(self):
+		radii = np.sqrt(np.diag(self._cov))
+		return [[c-r, c+r] for c, r in zip(self._center, radii)]
+
+	def copy(self, channels=None, center=None, cov=None, **kwargs):
+		if channels is None:
+			channels = self._channels
+		if center is None:
+			center = self._center
+		if cov is None:
+			cov = self._cov
+
+		return EllipsoidGate(channels, center, cov, **kwargs)
 
 	def _inside(self, array):
 		"""So much better than the PolyGate, can do in two lines!"""
@@ -68,8 +83,6 @@ class EllipseGate(EllipsoidGate):
 		r[0, 1] = -r[1, 0]
 		r[1, 1] = r[0, 0]
 
-		print r
-
 		m = r.dot(np.diag(self._axes))
 		cov = m.dot(m.transpose())
 
@@ -82,3 +95,15 @@ class EllipseGate(EllipsoidGate):
 	@property
 	def theta(self):
 		return self._theta
+
+	def copy(self, channels=None, center=None, axes=None, **kwargs):
+		if channels is None:
+			channels = self._channels
+		if center is None:
+			center = self._center
+		if axes is None:
+			axes = self._axes
+		if 'theta' not in kwargs and 'angle' not in kwargs:
+			kwargs['theta'] = self._theta
+
+		return EllipseGate(channels, center, axes, **kwargs)
