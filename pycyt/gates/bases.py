@@ -252,16 +252,15 @@ class BooleanGate(SimpleGate):
 
 class InvertedGate(SimpleGate):
 
-	def __init__(self, gate, region=None, ID=None):
+	def __init__(self, gate, region=None, **kwargs):
 
 		self._invert_gate = gate
 		self._invert_region = region
 
-		super(InvertedGate, self).__init__(gate.channels, default_region='in',
-			ID=ID)
+		super(InvertedGate, self).__init__(gate.channels, **kwargs)
 
 	def _inside(self, array):
-		return self._invert_gate.contains(array, self._invert_region)
+		return ~self._invert_gate.contains(array, self._invert_region)
 
 	def __invert__(self):
 		return self._invert_gate.copy(region=self._invert_region)
