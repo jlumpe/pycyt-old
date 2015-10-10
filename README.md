@@ -4,6 +4,8 @@
 
 It is currently in the early stages of development. See below for a list of current and planned features.
 
+If you just want to see it in action, jump over to the [examples](pycyt/examples/) page.
+
 
 ### What does it do?
 
@@ -22,10 +24,6 @@ Instead of being a replacement for, say, FlowJo, **pycyt** could instead be used
 
 Eventually, a GUI app with file IO, plotting, and gating will be a feature. This will not come until most of the basic features are in place, though.
 
-
-### Examples
-
-If you just want to see it in action, jump over to the [examples](pycyt/examples/) page. Otherwise continue below for features, requirements, and installation instructions.
 
 ### Design goals
 
