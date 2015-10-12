@@ -309,7 +309,7 @@ class TableInterface(object):
 					if self._type == 'flowframe':
 						table_ci = self._table.channels.index(cname)
 					else:
-						table_ci = self._table.columns.index(cname)
+						table_ci = list(self._table.columns).index(cname)
 					new_data[:,table_ci] = data[:,ci]
 
 				# Create and return new table object

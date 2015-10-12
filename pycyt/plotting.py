@@ -103,6 +103,11 @@ def density2d(
 
 	hist, xedges, yedges = bin2d(data, transform, range=range, bins=bins)
 
+	cutoff = kwargs.pop('cutoff', 99.5)
+	if cutoff is not None:
+		top = np.percentile(hist, cutoff)
+		hist[hist > top] = top
+
 	if kwargs.pop('log', False):
 		img_hist = np.ma.array(np.log(hist), mask=(hist==0)).transpose()
 	else:
@@ -169,7 +174,7 @@ def hist(data, *args, **kwargs):
 			ylab = r'$log_{{10}}(\mathrm{{{0}}})$'.format(ylab)
 		ax.set_ylabel(ylab)
 
-	histargs = dict(bins=32, histtype='stepfilled')
+	histargs = dict(bins=64, histtype='stepfilled')
 	histargs.update(kwargs)
 
 	h = ax.hist(array, **histargs)
