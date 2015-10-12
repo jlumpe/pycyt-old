@@ -4,7 +4,7 @@
 
 It is currently in the early stages of development. See below for a list of current and planned features.
 
-If you just want to see it in action, jump over to the [examples](pycyt/examples/) page.
+If you just want to see it in action, jump over to the [quick start](pycyt/examples/quickstart.ipynb) page or check out the other [examples](pycyt/examples).
 
 
 ### What does it do?
@@ -13,7 +13,7 @@ The purpose of the package is to allow for the integration of standard flow data
 
 To this end, **pycyt** provides a simple and flexible API to manipulate flow data and expose it as common Python data types. It is based around the [scipy stack](http://www.scipy.org/) and so should work nicely with many other tools right out the box.
 
-**pycyt** is intended for users with basic Python knowledge.
+**pycyt** is intended for users with at least basic Python knowledge, but to use it to its full potential familiarity with **scipy** is also recommended.
 
 
 ### What doesn't it do?
