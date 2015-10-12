@@ -194,15 +194,15 @@ def matrix(data, transform=None, figure=None):
 	# Apply transforms, get points in range but don't drop yet
 	transforms = parse_transforms_list(transform, table.ncol)
 	tarray = apply_transform(array, transform, drop=False, asarray=True)
-	in_range = np.ones((table.nrow, table.ncol), dtype=np.bool)
+	in_domain = np.ones((table.nrow, table.ncol), dtype=np.bool)
 	for col, t in enumerate(transforms):
 		if t is not None:
-			in_range[:,col] = t.array_in_range(array[:,col])
+			in_domain[:,col] = t.array_in_domain(array[:,col])
 
 	# Get limits for axes
 	lim = []
 	for col in range(table.ncol):
-		coldata = tarray[in_range[:, col], col]
+		coldata = tarray[in_domain[:, col], col]
 		lim.append([np.min(coldata), np.max(coldata)])
 
 	# Loop over positions in matrix
@@ -218,16 +218,16 @@ def matrix(data, transform=None, figure=None):
 			# Histogram
 			if xcol == ycol:
 
-				hist(tarray[in_range[:, xcol], xcol], ax=sp, xlab=None,
-					ylab=None)
+				hist(tarray[in_domain[:, xcol], xcol], ax=sp, xlab=None,
+					ylab=None, range=lim[xcol])
 				sp.xlim = lim[xcol]
 
 			# Density plot
 			else:
 
-				rows = np.all(in_range[:, [xcol, ycol]], axis=1)
+				rows = np.all(in_domain[:, [xcol, ycol]], axis=1)
 				density2d(tarray[:, [xcol, ycol]][rows, :], ax=sp,
-					labels=None)
+					range=[lim[xcol], lim[ycol]], labels=None)
 				sp.xlim = lim[xcol]
 				sp.ylim = lim[ycol]
 
