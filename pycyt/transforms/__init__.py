@@ -7,6 +7,8 @@ from abstracttransform import AbstractTransform
 from logtransform import LogTransform
 from lintransform import LinearTransform
 from asinhtransform import AsinhTransform
+from logicletransform import LogicleTransform
+from hyperlogtransform import HyperlogTransform
 
 
 def by_name(name, **kwargs):

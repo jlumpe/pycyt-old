@@ -43,7 +43,7 @@ class LogTransform(AbstractTransform):
 
 	@property
 	def inverse(self):
-		return InvLogTransform(**self.kwargs)
+		return ExponentialTransform(**self.kwargs)
 
 	@property
 	def label(self):
@@ -65,7 +65,7 @@ class LogTransform(AbstractTransform):
 		return array > 0
 
 
-class InvLogTransform(AbstractTransform):
+class ExponentialTransform(AbstractTransform):
 
 	def __init__(self, b=10, d=1, t=1, s=False):
 		self._base = b

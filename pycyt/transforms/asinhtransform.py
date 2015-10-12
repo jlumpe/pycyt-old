@@ -40,7 +40,7 @@ class AsinhTransform(AbstractTransform):
 
 	@property
 	def inverse(self):
-		return InvAsinhTransform(**self.kwargs)
+		return SinhTransform(**self.kwargs)
 
 	@property
 	def label(self):
@@ -53,7 +53,7 @@ class AsinhTransform(AbstractTransform):
 		return np.ones_like(array, dtype=np.bool)
 
 
-class InvAsinhTransform(AbstractTransform):
+class SinhTransform(AbstractTransform):
 
 	def __init__(self, b=10, t=1, pd=4, nd=0):
 		self._base = b
