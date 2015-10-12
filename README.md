@@ -56,7 +56,7 @@ Currently **pycyt**'s main focus is on ease of use and portability rather than s
 * **Read FCS files** - gets raw data as a numpy array and parses other metadata into accessible native Python objects. Supports the FCS3.1 standard explicitly, seems to work fine for 3.0. Haven't tried FCS2.x files yet.
 * **Flexible data container** - high-level `FlowFrame` container for flow data that may have been loaded from disk or created by other means. If linked to a file on disk, can enable lazy-loading so data is only read from file when needed and is not stored in memory otherwise.
 * **Compensation** - either from explicit matrix or from spillover matrix in file.
-* **Transformations** - log, hyperlog [WIP], asinh, etc. Customizable parameters and easy API for creating your own.
+* **Transformations** - log, asinh, hyperlog, logicle, etc. Customizable parameters and easy API for creating your own.
 * **Gates** - range/rectangle (N-dimensional), quadrant (generalized, N-dimensional [WIP]), polygon (2D), ellipsoid (N-dimensional), composite/boolean gates.
 * **Plotting** - easy plotting with matplotlib: 1d histogram, 2d density plot, matrix plots combining these. Can also overlay gates on plots. Note - the plotting functions are currently experimental and usage will likely change.
 
