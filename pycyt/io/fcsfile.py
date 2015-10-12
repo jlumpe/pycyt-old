@@ -22,8 +22,8 @@ class FCSFile(object):
 	Public attributes:
 		filepath: str (read-only property): Absolute path to FCS file on disk.
 		version: str (read-only property): FCS version of parsed file.
-		keywords: dict (read-only property): FCS keywords and values parsed
-			from the TEXT segment.
+		text: dict (read-only property): Keywords and their values parsed from
+			the TEXT segment.
 		par: int (read-only property): Number of paramters, equal to value of
 			$PAR keyword.
 		channels: list of str (read-only property): $PnN property
@@ -57,8 +57,8 @@ class FCSFile(object):
 		return self._version
 
 	@property
-	def keywords(self):
-		return self._keywords
+	def text(self):
+		return self._text
 
 	@property
 	def par(self):
@@ -261,9 +261,9 @@ class FCSFile(object):
 		"""
 		Reads in metadata from the file, run on initialization
 
-		This includes offsets to various file segments as well as all keywords
-		and their values. With this information the actual event data can be
-		read properly.
+		This includes offsets to various file segments as well as all TEXT
+		segment keywords and their values. With this information the actual
+		event data can be read properly.
 		"""
 
 		# Open file
@@ -307,8 +307,8 @@ class FCSFile(object):
 			# Read in TEXT segment
 			self._read_text(fh)
 
-			# Handle special values in keywords
-			self._handle_keywords()
+			# Handle special values in text
+			self._handle_text()
 
 	def _read_text(self, fh):
 		"""Read in and parse text segment of file given file handle"""
@@ -356,42 +356,42 @@ class FCSFile(object):
 			raise FCSReadError(path=self._path)
 
 		# Convert to dict
-		self._keywords = dict(zip(text_keys, text_values))
+		self._text = dict(zip(text_keys, text_values))
 
-	def _handle_keywords(self):
+	def _handle_text(self):
 		"""Parses and validates other important keyword values"""
 
 		# Number of channels/parameters
-		self._par = int(self._keywords['$PAR'])
+		self._par = int(self._text['$PAR'])
 
 		# Create channels dataframe
 		self._create_channels_df()
 
 		# Total number of events
-		self._tot = int(self._keywords['$TOT'])
+		self._tot = int(self._text['$TOT'])
 
 		# Only list mode supported
-		mode = self._keywords['$MODE']
+		mode = self._text['$MODE']
 		if mode != 'L':
 			raise FCSReadError(
 				'Error parsing "{0}": $MODE="{1}" not supported'
 				.format(self._path, mode))
 
 		# Byte order/endianness, >/< character used for numpy dtype
-		if self._keywords['$BYTEORD'] == '1,2,3,4':
+		if self._text['$BYTEORD'] == '1,2,3,4':
 			self._byteord = 'little'
 			ordchar = '<'
-		elif self._keywords['$BYTEORD'] == '4,3,2,1':
+		elif self._text['$BYTEORD'] == '4,3,2,1':
 			self._byteord = 'big'
 			ordchar = '>'
 		else:
 			# Mixed byte orders present in FCS3.0, unsupported
 			raise FCSReadError(
 				'Error parsing "{0}": unsupported $BYTEORD "{1}"'
-				.format(self._path, self._keywords['$BYTEORD']))
+				.format(self._path, self._text['$BYTEORD']))
 
 		# Check data type and determine information needed to read the data
-		self._datatype = self._keywords['$DATATYPE']
+		self._datatype = self._text['$DATATYPE']
 
 		# F datatype is 32-bit float as per FCS3.1 spec
 		if self._datatype == 'F':
@@ -469,10 +469,10 @@ class FCSFile(object):
 		# Read in spillover matrix
 		# $SPILLOVER was introduces in FCS3.1 as an official keyword,
 		# is sometimes just "SPILL" in FCS3.0 (BD cytometers)
-		if '$SPILLOVER' in self._keywords:
-			spill_str = self._keywords['$SPILLOVER']
-		elif 'SPILL' in self._keywords:
-			spill_str = self._keywords['SPILL']
+		if '$SPILLOVER' in self._text:
+			spill_str = self._text['$SPILLOVER']
+		elif 'SPILL' in self._text:
+			spill_str = self._text['SPILL']
 		else:
 			spill_str = None
 
@@ -540,51 +540,51 @@ class FCSFile(object):
 			])
 
 		# Fill data frame
-		for i in range(0, self._par):
+		for i in range(1, self._par + 1):
 
-			prefix = '$P' + str(i + 1)
+			prefix = '$P' + str(i)
 
 			row = dict()
 
 			# Required keywords
-			row['$PnB'] = int(self._keywords[prefix + 'B'])
-			row['$PnN'] = self._keywords[prefix + 'N']
-			row['$PnR'] = int(self._keywords[prefix + 'R'])
+			row['$PnB'] = int(self._text[prefix + 'B'])
+			row['$PnN'] = self._text[prefix + 'N']
+			row['$PnR'] = int(self._text[prefix + 'R'])
 
-			pne = self._keywords[prefix + 'E']
+			pne = self._text[prefix + 'E']
 			f1, f2 = tuple(pne.split(','))
 			row['$PnE'] = (float(f1), float(f2))
 
 			# Optional keywords
-			row['$PnF'] = self._keywords.get(prefix + 'F')
-			row['$PnL'] = self._keywords.get(prefix + 'L', '').split(',')
-			row['$PnS'] = self._keywords.get(prefix + 'S')
-			row['$PnT'] = self._keywords.get(prefix + 'T')
+			row['$PnF'] = self._text.get(prefix + 'F')
+			row['$PnL'] = self._text.get(prefix + 'L', '').split(',')
+			row['$PnS'] = self._text.get(prefix + 'S')
+			row['$PnT'] = self._text.get(prefix + 'T')
 
 			try:
-				pnd = self._keywords[prefix + 'D']
+				pnd = self._text[prefix + 'D']
 				scale, f1, f2 = tuple(pnd.split(','))
 				row['$PnD'] = (scale, float(f1), float(f2))
 			except KeyError:
 				row['$PnD'] = None
 
 			try:
-				row['$PnG'] = float(self._keywords[prefix + 'G'])
+				row['$PnG'] = float(self._text[prefix + 'G'])
 			except KeyError:
 				row['$PnG'] = np.nan
 
 			try:
-				row['$PnO'] = float(self._keywords[prefix + 'O'])
+				row['$PnO'] = float(self._text[prefix + 'O'])
 			except KeyError:
 				row['$PnO'] = np.nan
 
 			try:
-				row['$PnP'] = float(self._keywords[prefix + 'P'])
+				row['$PnP'] = float(self._text[prefix + 'P'])
 			except KeyError:
 				row['$PnP'] = np.nan
 
 			try:
-				row['$PnV'] = float(self._keywords[prefix + 'V'])
+				row['$PnV'] = float(self._text[prefix + 'V'])
 			except KeyError:
 				row['$PnV'] = np.nan
 

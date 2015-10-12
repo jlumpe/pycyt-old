@@ -22,12 +22,15 @@ class FlowFrame(AutoIDMixin):
 		data: pandas.DataFrame. The most important one. A pandas DataFrame
 			with events as rows and channels as columns. Is assignable as long
 			as the new dataframe has the same columns and column names.
+		values. numpy.ndarray. Data as numeric array. Same as
+			FlowFrame.data.values.
 		filepath: str|None (read-only property): If backed by a file on disk,
 			absolute path to that file.
 		fcsfile: pyct.io.FCSFile|None (read-only property). If backed by file
 			on disk, the FCSFile instance describing that file.
 		lazy: bool. Whether data is lazy-loaded from disk when accessed.
-		keywords: dict (read-only property): FCS keywords and values.
+		text: dict (read-only property): Keywords and values from TEXT
+			segment of FCS file.
 		par: int (read-only property): Number of parameters/channels
 		channels: list of str (read-only property): $PnN property
 			for each channel.
@@ -37,12 +40,14 @@ class FlowFrame(AutoIDMixin):
 			populated automatically.
 		tot: int|long (read-only property): Total number of events, rows of
 			data matrix.
+		shape: tuple (read-only property). 2-tuple of (tot, par) properties.
 
 	Public methods:
 		copy(): Creates a new DataFrame with copy of this one's data.
 		filter(): Creates a new DataFrame with subset of this one's
 			rows/events. Supports several indexing methods.
-
+		describe(): Same as FlowFrame.data.describe(), gives basic statistics
+			like mean and percentiles for each channel.
 	"""
 
 	def __init__(self, from_, **kwargs):
@@ -226,6 +231,10 @@ class FlowFrame(AutoIDMixin):
 			raise TypeError(value)
 
 	@property
+	def values(self):
+		return self.data.values
+
+	@property
 	def filepath(self):
 		if self._fcsfile is not None:
 			return self._fcsfile.filepath
@@ -256,9 +265,9 @@ class FlowFrame(AutoIDMixin):
 			self._data = self._fcsfile.read_data(fmt='matrix')
 
 	@property
-	def keywords(self):
+	def text(self):
 		if self._fcsfile is not None:
-			return self._fcsfile.keywords
+			return self._fcsfile.text
 		else:
 			return None # TODO
 
@@ -283,6 +292,10 @@ class FlowFrame(AutoIDMixin):
 			return self._fcsfile.tot
 		else:
 			return self._data.shape[0]
+
+	@property
+	def shape(self):
+		return (self.tot, self._par)
 
 	def __repr__(self):
 		return '<{0} {1}, {2}x{3}>'.format(type(self).__name__,
@@ -429,6 +442,16 @@ class FlowFrame(AutoIDMixin):
 
 		# Create from DataFrame and any additional arguments
 		return FlowFrame(df, **kwargs)
+
+	def describe(self, *args, **kwargs):
+		"""
+		For convenience, just the describe() method of the underlying
+		pandas.DataFrame. Gives basic statistics on each channel.
+
+		Returns:
+			pandas.DataFrame
+		"""
+		return self.data.describe(*args, **kwargs)
 
 	def _load_data(self, comp=None):
 		"""Loads data from linked fcs file into pandas.DataFrame"""
