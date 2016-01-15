@@ -58,3 +58,39 @@ class AutoIDMixin(object):
 		ID = cls.__name__ + str(cls._next_ID)
 		cls._next_ID += 1
 		return ID
+
+
+class FileHandleManager(object):
+	"""
+	Context manager which takes either an already-open file handle or a file
+	path in its constructor, and returns an open file handle from the
+	__enter__ method. If a file path was passed, the handle is opened on
+	__enter__ and closed on __exit__. Meant to be used in functions which take
+	either an open file handle or file path as an argument.
+	"""
+
+	def __init__(self, file_, mode='r', **kwargs):
+		"""
+		Args:
+			file_: (stream object|basestring). Open file handle (or other
+				stream), or path to file to be opened.
+			mode: basestring. Mode to open file with, if file_ is a string.
+				Default 'r' for reading in text mode (same as open() default).
+			**kwargs: Passed to open() if needed.
+		"""
+		self.file_ = file_
+		self.mode = mode
+		self.kwargs = kwargs
+
+	def __enter__(self):
+		if isinstance(self.file_, basestring):
+			self.fh = open(self.file_, mode=self.mode, **self.kwargs)
+			self.needs_close = True
+		else:
+			self.fh = self.file_
+			self.needs_close = False
+		return self.fh
+
+	def __exit__(self, type, value, traceback):
+		if self.needs_close:
+			self.fh.close()
