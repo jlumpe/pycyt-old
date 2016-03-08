@@ -1,6 +1,6 @@
 # pycyt
 
-**pycyt** is a Python API for the analysis of high-throughput flow cytometry data.
+**pycyt** is a Python package for the analysis of high-throughput flow cytometry data.
 
 It is currently in the early stages of development. See below for a list of current and planned features.
 
@@ -18,7 +18,7 @@ To this end, **pycyt** provides a simple and flexible API to manipulate flow dat
 
 ### What doesn't it do?
 
-Currently, there is no built-in GUI. This is an API, not an application. A level of interactivity is available if used in an environment like [IPython](http://ipython.org/), which enables interactive plots, and it is built with this in mind.
+Currently, there is no built-in GUI. A level of interactivity is available if used in an environment like [IPython](http://ipython.org/), which enables interactive plots, and it is built with this in mind.
 
 Instead of being a replacement for, say, FlowJo, **pycyt** could instead be used to load a FlowJo workspace and then perform a more complicated custom analysis on populations you have already defined.
 
