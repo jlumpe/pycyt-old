@@ -267,47 +267,80 @@ def transparency_cmap(color):
 
 	return mpl.colors.ListedColormap([transparent, color])
 
+def auto_gate_range(gate, transform=None):
 
-def plot_gate_img(gate, region, bins=256, ax=None, c='b'):
+	range = gate.bbox
+	for r in range:
+		if r[0] is None and r[1] is None:
+			r[0] = 0
+			r[1] = 1
+		elif r[0] is None:
+			r[0] = r[1] = 1
+		elif r[1] is None:
+			r[1] = r[0] + 1
+
+		d = (r[1] - r[0]) / 2.
+		m = (r[0] + r[1]) / 2.
+		r[0] = m - d * 1.1
+		r[1] = m + d * 1.1
+
+	range = apply_transform(np.asarray(zip(*range)), transform, asarray=True)
+	range = map(list, list(zip(*range)))
+
+	return range
+
+
+def plot_gate_img(gate, range=None, bins=256, transform=None, ax=None, c='b', **kwargs):
 
 	if ax is None:
 		ax = plt.gca()
 
-	img = gate_img(gate, region, bins)
+	if range is None:
+		range = auto_gate_range(gate, transform)
+
+	img = gate_img(gate, range, transform=transform, bins=bins)
 
 	cmap = transparency_cmap(c)
 
-	ax.imshow(img, origin='lower', extent=region[0] + region[1],
-		aspect='auto', cmap=cmap)
+	ax.imshow(img, origin='lower', extent=range[0] + range[1],
+		aspect='auto', cmap=cmap, **kwargs)
 
 
-def plot_gate_edges(gate, region, bins=256, ax=None, c='b'):
+def plot_gate_edges(gate, range=None, bins=256, transform=None, ax=None, c='b', **kwargs):
 
 	if ax is None:
 		ax = plt.gca()
 
-	edges = gate_edges(gate, region, bins)
+	if range is None:
+		range = auto_gate_range(gate, transform)
+
+	edges = gate_edges(gate, range, bins=bins, transform=transform)
 
 	cmap = transparency_cmap(c)
 
-	ax.imshow(edges, origin='lower', extent=region[0] + region[1],
-		aspect='auto', cmap=cmap)
+	ax.imshow(edges, origin='lower', extent=range[0] + range[1],
+		aspect='auto', cmap=cmap, **kwargs)
 
 
-def gate_edges(gate, region, bins=256):
+def gate_edges(gate, range=None, bins=256, transform=None):
 
-	img = gate_img(gate, region, bins=bins)
+	img = gate_img(gate, range, bins=bins, transform=transform)
 
 	edges = ndimage.sobel(img, 0) | ndimage.sobel(img, 1)
 
 	return edges
 
 
-def gate_img(gate, region, bins=256):
+def gate_img(gate, range=None, bins=256, transform=None):
 
-	x, y = np.meshgrid(np.linspace(*region[0], num=bins), np.linspace(*region[1], num=bins))
+	if range is None:
+		range = auto_gate_range(gate, transform)
+
+	x, y = np.meshgrid(np.linspace(*range[0], num=bins), np.linspace(*range[1], num=bins))
 
 	points = np.vstack((x.flatten(), y.flatten())).transpose()
+	points = apply_transform(points, transform, inverse=True, drop=True,
+		asarray=True)
 
 	img = gate.contains(points).reshape((bins, bins))
 

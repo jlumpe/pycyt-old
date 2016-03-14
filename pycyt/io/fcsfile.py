@@ -307,6 +307,18 @@ class FCSFile(object):
 			# Read in TEXT segment
 			self._read_text(fh)
 
+			# If the DATA segment extends outside the first 99,999,999 bytes
+			# of the file the offsets cannot be stored in the base allocated
+			# in the header. In this case the standard dictates that the
+			# header contain the strings '       0' instead and that the
+			# actual offsets be given with the $BEGINDATA and $ENDDATA
+			# keywords.
+			if any(o <= 0 for o in self._offsets['DATA']):
+				self._offsets['DATA'] = (
+					int(self._text['$BEGINDATA']),
+					int(self._text['$ENDDATA'])
+					)
+
 			# Handle special values in text
 			self._handle_text()
 
@@ -467,7 +479,7 @@ class FCSFile(object):
 				.format(self._path, mode))
 
 		# Read in spillover matrix
-		# $SPILLOVER was introduces in FCS3.1 as an official keyword,
+		# $SPILLOVER was introduced in FCS3.1 as an official keyword,
 		# is sometimes just "SPILL" in FCS3.0 (BD cytometers)
 		if '$SPILLOVER' in self._text:
 			spill_str = self._text['$SPILLOVER']
@@ -488,7 +500,7 @@ class FCSFile(object):
 				assert 0 < n <= self._par
 				assert len(spill_values) == 1 + n + n**2
 
-				# Channel names in next n values (matchin $PnN)
+				# Channel names in next n values (matching $PnN)
 				spill_channels = spill_values[1:n+1]
 				spill_ch_idx = [list(self._channel_info['$PnN']).index(ch)
 					for ch in spill_channels]
@@ -507,8 +519,10 @@ class FCSFile(object):
 
 				self._spillover = spill_matrix
 
-			except Exception as e:
-				# Warn
+			# AssertionError on false assertions (duh), ValueError when
+			# parsing invalid float literal or param name not in $PnN's
+			except (AssertionError, ValueError) as e:
+				# Just warn
 				warnings.warn(
 					'Error parsing spillover matrix in "{0}": {1}: {2}'
 					.format(self._path, type(e).__name__, e))
@@ -568,25 +582,8 @@ class FCSFile(object):
 			except KeyError:
 				row['$PnD'] = None
 
-			try:
-				row['$PnG'] = float(self._text[prefix + 'G'])
-			except KeyError:
-				row['$PnG'] = np.nan
-
-			try:
-				row['$PnO'] = float(self._text[prefix + 'O'])
-			except KeyError:
-				row['$PnO'] = np.nan
-
-			try:
-				row['$PnP'] = float(self._text[prefix + 'P'])
-			except KeyError:
-				row['$PnP'] = np.nan
-
-			try:
-				row['$PnV'] = float(self._text[prefix + 'V'])
-			except KeyError:
-				row['$PnV'] = np.nan
+			for c in ['G', 'O', 'P', 'V']:
+				row['$Pn' + c] = float(self._text.get(prefix + c, 'nan'))
 
 			# Add row
 			self._channel_info.loc[i] = row

@@ -73,6 +73,7 @@ def transform(data, *args, **kwargs):
 	# Sort out keyword arguments
 	drop = kwargs.pop('drop', False)
 	asarray = kwargs.pop('asarray', False)
+	inverse = kwargs.pop('inverse', False)
 	if len(kwargs) > 1:
 		raise TypeError(
 			'Unknown keyword argument {0}'
@@ -102,6 +103,11 @@ def transform(data, *args, **kwargs):
 		# Parse arguments to transform objects
 		transforms = map(parse_transform_arg, targ)
 
+		# Invert if needed
+		if inverse:
+			transforms = [t.inverse if t is not None else None
+				for t in transforms]
+
 		# Drop rows not within domain of transformation
 		if drop:
 			in_domain = np.full(table.nrow, True, dtype=np.bool)
@@ -121,6 +127,8 @@ def transform(data, *args, **kwargs):
 
 		# Parse argument
 		transform = parse_transform_arg(targ)
+		if inverse:
+			transform = transform.inverse
 
 		# Drop rows
 		if drop:

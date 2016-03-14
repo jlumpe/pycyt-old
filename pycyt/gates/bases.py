@@ -161,10 +161,6 @@ class SimpleGate(AbstractGate):
 
 	def _inside(self, array):
 		raise NotImplementedError()
-	
-	def __invert__(self):
-		other_region = 'out' if self._default_region == 'in' else 'out'
-		return self.copy(default_region=other_region)
 
 
 class BooleanGate(SimpleGate):
