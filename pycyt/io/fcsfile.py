@@ -489,46 +489,50 @@ class FCSFile(object):
 			spill_str = None
 
 		if spill_str is not None:
+			try:
+				self._spillover = self._parse_spillover(spill_str)
 
 			# If any errors encountered while parsing, simply warn
-			try:
-				# Values separated by commas
-				spill_values = spill_str.split(',')
-
-				# First value is integer number of channels in matrix
-				n = int(spill_values[0])
-				assert 0 < n <= self._par
-				assert len(spill_values) == 1 + n + n**2
-
-				# Channel names in next n values (matching $PnN)
-				spill_channels = spill_values[1:n+1]
-				spill_ch_idx = [list(self._channel_info['$PnN']).index(ch)
-					for ch in spill_channels]
-
-				# Create identity matrix for ALL parameters, in case
-				# $SPILLOVER only specifies a subset
-				spill_matrix = np.identity(self._par)
-
-				# Final n^2 values are the matrix in row-major order
-				for r in range(n):
-					for c in range(n):
-						value = float(spill_values[1 + (r + 1) * n + c])
-						# Diagonals should all be 1.0
-						if r == c: assert value == 1.0
-						spill_matrix[spill_ch_idx[r], spill_ch_idx[c]] = value
-
-				self._spillover = spill_matrix
-
-			# AssertionError on false assertions (duh), ValueError when
-			# parsing invalid float literal or param name not in $PnN's
-			except (AssertionError, ValueError) as e:
-				# Just warn
+			except:
 				warnings.warn(
 					'Error parsing spillover matrix in "{0}": {1}: {2}'
-					.format(self._path, type(e).__name__, e))
+					.format(self._path, type(e).__name__, e)
+				)
+				self._spillover = None
 
 		else:
 			self._spillover = None
+
+	def _parse_spillover(self, spill_str):
+		"""
+		Parses a spillover matrix from the $SPILLOVER keyword value
+		"""
+		# Values separated by commas
+		spill_values = spill_str.split(',')
+
+		# First value is integer number of channels in matrix
+		n = int(spill_values[0])
+		assert 0 < n <= self._par
+		assert len(spill_values) == 1 + n + n**2
+
+		# Channel names in next n values (matching $PnN)
+		spill_channels = spill_values[1:n+1]
+		spill_ch_idx = [list(self._channel_info['$PnN']).index(ch)
+			for ch in spill_channels]
+
+		# Create identity matrix for ALL parameters, in case
+		# $SPILLOVER only specifies a subset
+		spill_matrix = np.identity(self._par)
+
+		# Final n^2 values are the matrix in row-major order
+		for r in range(n):
+			for c in range(n):
+				value = float(spill_values[1 + (r + 1) * n + c])
+				# Diagonals should all be 1.0
+				if r == c: assert value == 1.0
+				spill_matrix[spill_ch_idx[r], spill_ch_idx[c]] = value
+
+		return spill_matrix
 
 	def _create_channels_df(self):
 		"""
@@ -536,54 +540,65 @@ class FCSFile(object):
 		keywords
 		"""
 
-		# Create empty table
-		self._channel_info = pd.DataFrame.from_items([
-			('$PnN', pd.Series(dtype=str)),    # Short name
-			('$PnB', pd.Series(dtype=int)),    # Bits reserved for parameter
-			('$PnE', pd.Series(dtype=object)), # Amplification type (float, float)
-			('$PnR', pd.Series(dtype=int)),    # Range
-			('$PnD', pd.Series(dtype=object)), # Optional - visualization scale
-			('$PnF', pd.Series(dtype=int)),    # Optional - optical filter
-			('$PnG', pd.Series(dtype=float)),  # Optional - gain
-			('$PnL', pd.Series(dtype=object)), # Optional - exitation wavelengths
-			('$PnO', pd.Series(dtype=float)),  # Optional - excitation power
-			('$PnP', pd.Series(dtype=float)),  # Optional - percent light collected
-			('$PnS', pd.Series(dtype=str)),    # Optional - long name
-			('$PnT', pd.Series(dtype=str)),    # Optional - detector type
-			('$PnV', pd.Series(dtype=float))   # Optional - detector voltage
-			])
+		columns = [
+			'$PnN', # Short name
+			'$PnB', # Bits reserved for parameter
+			'$PnE', # Amplification type (float, float)
+			'$PnR', # Range
+			'$PnD', # Optional - visualization scale
+			'$PnF', # Optional - optical filter
+			'$PnG', # Optional - gain
+			'$PnL', # Optional - exitation wavelengths
+			'$PnO', # Optional - excitation power
+			'$PnP', # Optional - percent light collected
+			'$PnS', # Optional - long name
+			'$PnT', # Optional - detector type
+			'$PnV', # Optional - detector voltage
+		]
 
-		# Fill data frame
-		for i in range(1, self._par + 1):
-
-			prefix = '$P' + str(i)
+		# Create rows
+		rows = []
+		for i in range(self._par):
 
 			row = dict()
 
-			# Required keywords
-			row['$PnB'] = int(self._text[prefix + 'B'])
-			row['$PnN'] = self._text[prefix + 'N']
-			row['$PnR'] = int(self._text[prefix + 'R'])
+			# All text keyword values for this channel
+			text_vals = dict()
+			for col in columns:
+				key = col.replace('n', str(i + 1))
+				try:
+					text_vals[col[-1]] = self._text[key]
+				except KeyError:
+					pass
 
-			pne = self._text[prefix + 'E']
-			f1, f2 = tuple(pne.split(','))
+			# Required keywords
+			row['$PnB'] = int(text_vals['B'])
+			row['$PnN'] = text_vals['N']
+			row['$PnR'] = int(text_vals['R'])
+
+			f1, f2 = text_vals['E'].split(',')
 			row['$PnE'] = (float(f1), float(f2))
 
 			# Optional keywords
-			row['$PnF'] = self._text.get(prefix + 'F')
-			row['$PnL'] = self._text.get(prefix + 'L', '').split(',')
-			row['$PnS'] = self._text.get(prefix + 'S')
-			row['$PnT'] = self._text.get(prefix + 'T')
+			row['$PnF'] = text_vals.get('F')
+			row['$PnL'] = text_vals.get('L', '').split(',')
+			row['$PnS'] = text_vals.get('S')
+			row['$PnT'] = text_vals.get('T')
 
 			try:
-				pnd = self._text[prefix + 'D']
-				scale, f1, f2 = tuple(pnd.split(','))
+				scale, f1, f2 = text_vals['D'].split(',')
 				row['$PnD'] = (scale, float(f1), float(f2))
-			except KeyError:
+			except (KeyError, ValueError):
 				row['$PnD'] = None
 
 			for c in ['G', 'O', 'P', 'V']:
-				row['$Pn' + c] = float(self._text.get(prefix + c, 'nan'))
+				try:
+					row['$Pn' + c] = float(text_vals.get(c, 'nan'))
+				except ValueError:
+					row['$Pn' + c] = float('nan')
 
-			# Add row
-			self._channel_info.loc[i] = row
+			rows.append(row)
+
+		# Create dataframe (one-indexed, like channel numbers)
+		self._channel_info = pd.DataFrame.from_records(rows, columns=columns,
+			index=range(1, self._par + 1))
