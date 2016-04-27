@@ -24,7 +24,7 @@ class FCSFile(object):
 		version: str (read-only property): FCS version of parsed file.
 		text: dict (read-only property): Keywords and their values parsed from
 			the TEXT segment.
-		par: int (read-only property): Number of paramters, equal to value of
+		par: int (read-only property): Number of parameters, equal to value of
 			$PAR keyword.
 		channels: list of str (read-only property): $PnN property
 			for each channel.
@@ -333,7 +333,18 @@ class FCSFile(object):
 		# Delimiter character should be at beginning and end of segment
 		delim = text[0]
 		if text[-1] != delim:
-			raise FCSReadError(path=self._path)
+
+			# Sometimes instruments make the end offset exclusive, even though
+			# it shouldn't be...
+			if text[-2] == delim:
+				new_offset = (text_offset[0], text_offset[1] - 1)
+				self._offsets['TEXT'] = new_offset
+				text_offset = new_offset
+				text = text[:-1]
+
+			# Otherwise just raise an error
+			else:
+				raise FCSReadError(path=self._path)
 
 		# This shouldn't happen but just in case...
 		if text[1] == delim:
